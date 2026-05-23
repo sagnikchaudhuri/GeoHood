@@ -107,10 +107,10 @@ export function HomeScreen() {
             {/* "More" tile */}
             <button
               onClick={() => setActiveTab('search')}
-              className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-[#1E1E1E] bg-[#161616] transition-all"
+              className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-[#1E1E1E] bg-[#161616] active:bg-[#1A1A1A] transition-all"
             >
-              <span className="text-xl leading-none">···</span>
-              <span className="text-[10px] font-semibold text-[#ADADAD]">More</span>
+              <span className="text-lg font-bold text-[#5C5C5C] leading-none">···</span>
+              <span className="text-[10px] font-semibold text-[#5C5C5C]">More</span>
             </button>
           </div>
         </div>
