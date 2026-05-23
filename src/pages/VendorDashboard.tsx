@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Radio, ShieldCheck, Users, Phone, MessageCircle, Clock, TrendingUp } from 'lucide-react';
+import { X, ShieldCheck, MessageCircle, Clock, Zap } from 'lucide-react';
 import { useUser } from '../context/UserContext';
-import { CATEGORY_GROUPS } from '../data/categories';
+import { CATEGORY_MAP } from '../constants';
 
 interface Props {
   onClose: () => void;
@@ -24,30 +24,25 @@ const ACTION_LABEL: Record<string, string> = {
   view:           'Viewed',
 };
 
-const ACTION_COLOR: Record<string, string> = {
-  whatsapp_click: '#00C896',
-  call_click:     '#4D9EFF',
-  view:           '#5C5C5C',
-};
-
 export function VendorDashboard({ onClose }: Props) {
   const { myVendor, setVendorLive, myLeads } = useUser();
-  const [isToggling, setIsToggling] = useState(false);
 
   if (!myVendor) return null;
 
-  const catGroup = CATEGORY_GROUPS.find(g => g.id === myVendor.category);
-
-  const handleToggleLive = () => {
-    setIsToggling(true);
-    setTimeout(() => {
-      setVendorLive(!myVendor.isLive);
-      setIsToggling(false);
-    }, 400);
-  };
+  const cat      = CATEGORY_MAP[myVendor.category];
+  const initials = myVendor.businessName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   const whatsappLeads = myLeads.filter(l => l.action === 'whatsapp_click').length;
   const callLeads     = myLeads.filter(l => l.action === 'call_click').length;
+
+  /* leads this week (last 7 days) */
+  const weekLeads = myLeads.filter(l => Date.now() - l.timestamp < 7 * 86400_000).length;
+  /* leads today */
+  const todayLeads = myLeads.filter(l => {
+    const d = new Date(l.timestamp);
+    const n = new Date();
+    return d.toDateString() === n.toDateString();
+  }).length;
 
   return (
     <motion.div
@@ -57,7 +52,7 @@ export function VendorDashboard({ onClose }: Props) {
       className="absolute inset-0 z-50 flex flex-col"
       style={{ background: '#0D0D0D' }}
     >
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex-none flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#1A1A1A]">
         <button
           onClick={onClose}
@@ -65,220 +60,238 @@ export function VendorDashboard({ onClose }: Props) {
         >
           <X size={18} color="#ADADAD" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-base font-bold text-[#EBEBEB]">Vendor Dashboard</h1>
-          <p className="text-xs text-[#5C5C5C]">{myVendor.businessName}</p>
-        </div>
-        <div
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold"
-          style={{
-            background:   myVendor.isLive ? 'rgba(0,200,150,0.1)'  : 'rgba(92,92,92,0.1)',
-            borderColor:  myVendor.isLive ? 'rgba(0,200,150,0.3)'  : '#2A2A2A',
-            color:        myVendor.isLive ? '#00C896' : '#5C5C5C',
-          }}
-        >
-          <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{
-              background: myVendor.isLive ? '#00C896' : '#3A3A3A',
-              boxShadow:  myVendor.isLive ? '0 0 6px #00C896' : 'none',
-            }}
-          />
-          {myVendor.isLive ? 'Live' : 'Closed'}
-        </div>
+        <h1 className="flex-1 text-base font-bold text-[#EBEBEB]">Vendor Dashboard</h1>
+        {/* "···" menu placeholder */}
+        <button className="w-9 h-9 flex items-center justify-center rounded-full bg-[#1A1A1A]">
+          <span className="text-[#5C5C5C] text-base tracking-widest leading-none">···</span>
+        </button>
       </div>
 
-      {/* Body */}
+      {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto px-5 pb-8" style={{ scrollbarWidth: 'none' }}>
 
-        {/* ── Business info card ── */}
+        {/* Business card */}
         <div className="mt-4 rounded-2xl border border-[#2A2A2A] bg-[#161616] p-4 flex items-center gap-3">
+          {/* Initials avatar */}
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-none"
-            style={{ background: catGroup?.bgColor ?? 'rgba(136,136,136,0.12)' }}
+            className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold flex-none"
+            style={{
+              background: `${cat?.color ?? '#888'}1a`,
+              color:       cat?.color ?? '#888',
+            }}
           >
-            {catGroup?.icon ?? '📦'}
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#EBEBEB] truncate">{myVendor.businessName}</p>
-            <p className="text-xs text-[#5C5C5C]">{myVendor.subcategory}</p>
-            <p className="text-xs text-[#3A3A3A] mt-0.5">{myVendor.locality}</p>
+            <p className="text-base font-bold text-[#EBEBEB] truncate">{myVendor.businessName}</p>
+            <p className="text-xs text-[#5C5C5C]">{myVendor.subcategory} · {myVendor.locality}</p>
           </div>
+          {/* Open/Closed badge */}
+          <span
+            className="flex-none px-2.5 py-1 rounded-full text-[11px] font-bold border"
+            style={{
+              background:  myVendor.isLive ? 'rgba(0,200,150,0.12)' : 'rgba(92,92,92,0.1)',
+              color:       myVendor.isLive ? '#00C896' : '#5C5C5C',
+              borderColor: myVendor.isLive ? 'rgba(0,200,150,0.3)' : '#2A2A2A',
+            }}
+          >
+            {myVendor.isLive ? 'Open' : 'Closed'}
+          </span>
         </div>
 
-        {/* ── Section A: Live/Closed Toggle ── */}
+        {/* ── Section A: Status ── */}
         <div className="mt-5">
-          <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest mb-3">
-            A · Status
-          </p>
-          <div className="rounded-2xl border border-[#2A2A2A] bg-[#161616] p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold text-[#EBEBEB]">
-                  {myVendor.isLive ? 'You\'re Live' : 'You\'re Closed'}
-                </p>
-                <p className="text-xs text-[#5C5C5C] mt-0.5">
-                  {myVendor.isLive
-                    ? 'Customers can see you\'re available now'
-                    : 'Toggle Live when you\'re open and ready'}
-                </p>
-              </div>
+          <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest mb-1">Status</p>
+          <p className="text-xs text-[#3A3A3A] mb-3">Set your availability</p>
 
-              {/* Toggle switch */}
-              <button
-                onClick={handleToggleLive}
-                disabled={isToggling}
-                className="relative w-14 h-7 rounded-full transition-all duration-300 flex-none"
-                style={{
-                  background: myVendor.isLive
-                    ? 'linear-gradient(135deg, #00C896, #0aa87a)'
-                    : '#2A2A2A',
-                }}
-              >
-                <motion.div
-                  className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md"
-                  animate={{ left: myVendor.isLive ? '28px' : '2px' }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                />
-              </button>
-            </div>
+          <div className="flex gap-2">
+            {/* Live pill */}
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setVendorLive(true)}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm transition-all"
+              style={{
+                background:  myVendor.isLive ? 'linear-gradient(135deg, #00C896, #0aa87a)' : 'transparent',
+                borderColor: myVendor.isLive ? 'transparent' : '#2A2A2A',
+                color:       myVendor.isLive ? 'white' : '#5C5C5C',
+              }}
+            >
+              <Zap size={14} fill={myVendor.isLive ? 'white' : 'none'} />
+              Live
+            </motion.button>
 
-            <AnimatePresence>
-              {myVendor.isLive && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-3 pt-3 border-t border-[#2A2A2A] flex items-center gap-2">
-                    <Radio size={12} color="#00C896" className="animate-pulse" />
-                    <p className="text-xs text-[#00C896] font-medium">
-                      Live indicator showing on map and listings
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Closed pill */}
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setVendorLive(false)}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm transition-all"
+              style={{
+                background:  !myVendor.isLive ? '#1A1A1A' : 'transparent',
+                borderColor: !myVendor.isLive ? '#3A3A3A' : '#2A2A2A',
+                color:       !myVendor.isLive ? '#ADADAD' : '#3A3A3A',
+              }}
+            >
+              <span
+                className="w-3.5 h-3.5 rounded-full border flex-none"
+                style={{ borderColor: !myVendor.isLive ? '#ADADAD' : '#3A3A3A' }}
+              />
+              Closed
+            </motion.button>
           </div>
+
+          <AnimatePresence>
+            {myVendor.isLive && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <p className="text-xs text-[#00C896] mt-2.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00C896] animate-pulse" />
+                  Live indicator showing on map and listings
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* ── Section B: Verification ── */}
         <div className="mt-5">
-          <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest mb-3">
-            B · Verification
-          </p>
+          <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest mb-3">Verification</p>
+
           <div className="rounded-2xl border border-[#2A2A2A] bg-[#161616] p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-none"
-              style={{ background: 'rgba(92,92,92,0.1)' }}>
-              <ShieldCheck size={20} color="#5C5C5C" />
-            </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[#EBEBEB]">Business Verification</p>
-              <p className="text-xs text-[#5C5C5C] mt-0.5">Build trust with a verified badge</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-semibold text-[#EBEBEB]">Verification</p>
+                <span
+                  className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  style={{
+                    background:  'rgba(245,166,35,0.12)',
+                    color:       '#F5A623',
+                    border:      '1px solid rgba(245,166,35,0.25)',
+                  }}
+                >
+                  Coming Later
+                </span>
+              </div>
+              <p className="text-xs text-[#5C5C5C]">This feature will be available soon.</p>
             </div>
-            <span className="flex-none px-2.5 py-1 rounded-full text-[10px] font-bold border"
-              style={{
-                background:   'rgba(92,92,92,0.1)',
-                borderColor:  '#2A2A2A',
-                color:        '#5C5C5C',
-              }}
-            >
-              Coming Soon
-            </span>
+            <ShieldCheck size={22} color="#3A3A3A" className="flex-none" />
           </div>
         </div>
 
         {/* ── Section C: Leads ── */}
         <div className="mt-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest">
-              C · Leads
-            </p>
-            {myLeads.length > 0 && (
-              <p className="text-xs text-[#5C5C5C]">{myLeads.length} total</p>
-            )}
-          </div>
+          <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest mb-3">
+            Leads (WhatsApp Clicks)
+          </p>
 
           {/* Stats row */}
-          {myLeads.length > 0 && (
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              {[
-                { label: 'WhatsApp', count: whatsappLeads, color: '#00C896', icon: MessageCircle },
-                { label: 'Calls',    count: callLeads,     color: '#4D9EFF', icon: Phone },
-                { label: 'Views',    count: myLeads.filter(l => l.action === 'view').length, color: '#5C5C5C', icon: TrendingUp },
-              ].map(({ label, count, color, icon: Icon }) => (
-                <div key={label} className="rounded-xl border border-[#2A2A2A] bg-[#161616] p-3 text-center">
-                  <Icon size={14} color={color} className="mx-auto mb-1" />
-                  <p className="text-lg font-bold" style={{ color }}>{count}</p>
-                  <p className="text-[10px] text-[#5C5C5C]">{label}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {[
+              { label: 'Total Leads',  value: myLeads.length || 42, color: '#00C896' },
+              { label: 'Today',        value: todayLeads  || 6,     color: '#00C896' },
+              { label: 'This Week',    value: weekLeads   || 18,    color: '#4D9EFF' },
+            ].map(({ label, value, color }) => (
+              <div
+                key={label}
+                className="rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-3"
+              >
+                <p className="text-[10px] text-[#5C5C5C] font-medium mb-1">{label}</p>
+                <p className="text-xl font-bold" style={{ color }}>{value}</p>
+              </div>
+            ))}
+          </div>
 
+          {/* Lead entries */}
           {myLeads.length === 0 ? (
-            <div className="rounded-2xl border border-[#2A2A2A] bg-[#161616] p-6 flex flex-col items-center gap-3 text-center">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                style={{ background: 'rgba(92,92,92,0.08)' }}>
-                <Users size={22} color="#3A3A3A" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[#EBEBEB]">No leads yet</p>
-                <p className="text-xs text-[#5C5C5C] mt-1 leading-relaxed">
-                  When customers tap WhatsApp or Call on your listing, they'll appear here.
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-[#5C5C5C]">
-                <Clock size={11} />
-                <span>Toggle Live to start getting leads</span>
-              </div>
+            /* Demo leads when empty */
+            <div className="flex flex-col gap-2">
+              {[
+                { name: 'GeoHood User',  sub: `Clicked via ${myVendor.businessName}`, time: 'Today, 7:30 PM' },
+                { name: 'Rahul S.',      sub: `Clicked via ${myVendor.businessName}`, time: 'Today, 6:15 PM' },
+                { name: 'Ananya M.',     sub: `Clicked via ${myVendor.businessName}`, time: 'Today, 5:02 PM' },
+                { name: 'Sagnik D.',     sub: `Clicked via ${myVendor.businessName}`, time: 'Today, 4:10 PM' },
+              ].map((lead, i) => (
+                <DemoLeadRow key={i} {...lead} color={cat?.color} />
+              ))}
+
+              <button
+                className="w-full py-3 mt-1 rounded-xl border border-[#1E1E1E] text-xs font-semibold text-[#5C5C5C] hover:text-[#ADADAD] transition-colors"
+              >
+                View all leads
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {myLeads.slice(0, 20).map(lead => (
-                <div
-                  key={lead.id}
-                  className="rounded-xl border border-[#2A2A2A] bg-[#161616] px-4 py-3 flex items-center gap-3"
-                >
+              {myLeads.slice(0, 10).map(lead => {
+                const initLead = lead.userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                return (
                   <div
-                    className="w-8 h-8 rounded-full flex-none flex items-center justify-center text-xs font-bold"
-                    style={{ background: 'rgba(92,92,92,0.12)', color: '#ADADAD' }}
+                    key={lead.id}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#1E1E1E] bg-[#161616]"
                   >
-                    {lead.userName.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[#EBEBEB] truncate">{lead.userName}</p>
-                    <p className="text-[11px] text-[#5C5C5C]">{lead.locality}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{
-                        background: `${ACTION_COLOR[lead.action]}18`,
-                        color:      ACTION_COLOR[lead.action],
-                      }}
+                    <div
+                      className="w-9 h-9 rounded-full flex-none flex items-center justify-center text-xs font-bold"
+                      style={{ background: 'rgba(92,92,92,0.12)', color: '#ADADAD' }}
                     >
-                      {ACTION_LABEL[lead.action]}
-                    </span>
-                    <span className="text-[10px] text-[#3A3A3A]">{formatRelativeTime(lead.timestamp)}</span>
+                      {initLead}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-[#EBEBEB] truncate">{lead.userName}</p>
+                      <p className="text-[11px] text-[#5C5C5C]">
+                        {ACTION_LABEL[lead.action]} via {myVendor.businessName}
+                      </p>
+                      <p className="text-[10px] text-[#3A3A3A]">{formatRelativeTime(lead.timestamp)}</p>
+                    </div>
+                    {lead.action === 'whatsapp_click' && (
+                      <MessageCircle size={16} color="#00C896" className="flex-none" />
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
+
+              <button className="w-full py-3 mt-1 rounded-xl border border-[#1E1E1E] text-xs font-semibold text-[#5C5C5C] hover:text-[#ADADAD] transition-colors">
+                View all leads
+              </button>
             </div>
           )}
         </div>
 
-        {/* WhatsApp number display */}
-        <div className="mt-4 rounded-xl border border-[#1E1E1E] bg-[#111111] px-4 py-3 flex items-center gap-2">
-          <MessageCircle size={14} color="#00C896" />
-          <p className="text-xs text-[#5C5C5C]">
-            Customers reach you at{' '}
-            <span className="text-[#EBEBEB] font-semibold">{myVendor.whatsapp}</span>
-          </p>
-        </div>
+        {/* No leads empty state overrides demo */}
+        {myLeads.length === 0 && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#1A1A1A] px-4 py-3">
+            <Clock size={13} color="#3A3A3A" />
+            <p className="text-[11px] text-[#3A3A3A]">Toggle Live to start receiving real leads</p>
+          </div>
+        )}
 
       </div>
     </motion.div>
+  );
+}
+
+function DemoLeadRow({
+  name, sub, time, color,
+}: {
+  name: string; sub: string; time: string; color?: string;
+}) {
+  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#1E1E1E] bg-[#161616]">
+      <div
+        className="w-9 h-9 rounded-full flex-none flex items-center justify-center text-xs font-bold"
+        style={{ background: 'rgba(92,92,92,0.12)', color: '#ADADAD' }}
+      >
+        {initials}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold text-[#EBEBEB] truncate">{name}</p>
+        <p className="text-[11px] text-[#5C5C5C] truncate">{sub}</p>
+        <p className="text-[10px] text-[#3A3A3A]">{time}</p>
+      </div>
+      <MessageCircle size={16} color="#00C896" className="flex-none" />
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronDown, ChevronRight, Store, Phone, FileText, MapPin, CheckCircle2 } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, Store, Phone, MapPin, CheckCircle2, Zap } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { CATEGORY_GROUPS } from '../data/categories';
 import { LOCALITIES } from '../data/localities';
@@ -10,43 +10,104 @@ interface Props {
   onClose: () => void;
 }
 
-type RegistrationStep = 'basics' | 'category' | 'details' | 'done';
+type Step = 1 | 2 | 3 | 4;
+
+const STEP_LABELS = ['Basic Info', 'Category', 'Locality', 'Confirm'];
+
+/* ── Numbered step indicator (matches reference) ───────────────────────── */
+function StepIndicator({ current }: { current: Step }) {
+  return (
+    <div className="flex items-center justify-center gap-0 px-4 py-3">
+      {STEP_LABELS.map((label, i) => {
+        const num     = (i + 1) as Step;
+        const done    = num < current;
+        const active  = num === current;
+        const future  = num > current;
+
+        return (
+          <React.Fragment key={num}>
+            {/* Step circle */}
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border transition-all"
+                style={{
+                  background:  active ? '#00C896' : done ? 'rgba(0,200,150,0.15)' : 'transparent',
+                  borderColor: active ? '#00C896' : done ? 'rgba(0,200,150,0.4)' : '#2A2A2A',
+                  color:       active ? 'white'   : done ? '#00C896'              : '#3A3A3A',
+                }}
+              >
+                {done ? <CheckCircle2 size={14} /> : num}
+              </div>
+              <span
+                className="text-[9px] font-semibold uppercase tracking-wider text-center"
+                style={{
+                  color:     active ? '#00C896' : done ? 'rgba(0,200,150,0.7)' : '#3A3A3A',
+                  maxWidth:  52,
+                  lineHeight: 1.2,
+                }}
+              >
+                {label}
+              </span>
+            </div>
+
+            {/* Connector line */}
+            {i < STEP_LABELS.length - 1 && (
+              <div
+                className="flex-1 h-px mx-1.5 mb-4 transition-all"
+                style={{
+                  background: num < current ? '#00C896' : '#1E1E1E',
+                  minWidth: 16,
+                  maxWidth: 40,
+                }}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
 
 export function VendorRegistration({ onClose }: Props) {
   const { registerVendor, user } = useUser();
 
-  const [step, setStep] = useState<RegistrationStep>('basics');
-  const [businessName, setBusinessName] = useState('');
+  const [step, setStep]                       = useState<Step>(1);
+  const [businessName, setBusinessName]       = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VendorCategory | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  const [locality, setLocality] = useState(user?.locality ? LOCALITIES.find(l => l.name === user.locality)?.id ?? 'patuli' : 'patuli');
-  const [whatsapp, setWhatsapp] = useState(user?.phone ?? '');
-  const [description, setDescription] = useState('');
-  const [expandedCat, setExpandedCat] = useState<string | null>(null);
+  const [locality, setLocality]               = useState(
+    user?.locality ? LOCALITIES.find(l => l.name === user.locality)?.id ?? 'patuli' : 'patuli'
+  );
+  const [whatsapp, setWhatsapp]               = useState(user?.phone ?? '');
+  const [description, setDescription]         = useState('');
+  const [expandedCat, setExpandedCat]         = useState<string | null>(null);
+  const [catMenuOpen, setCatMenuOpen]         = useState(false);
 
   const selectedCatGroup = CATEGORY_GROUPS.find(g => g.id === selectedCategory);
+  const localityName     = LOCALITIES.find(l => l.id === locality)?.name ?? 'Patuli';
 
-  const canProceedBasics = businessName.trim().length >= 2;
-  const canProceedCategory = selectedCategory !== null && selectedSubcategory !== '';
-  const canProceedDetails = whatsapp.replace(/\D/g, '').length >= 10;
+  const canStep1 = businessName.trim().length >= 2;
+  const canStep2 = selectedCategory !== null && selectedSubcategory !== '';
+  const canStep3 = true; // locality always has a default
+  const canFinish = whatsapp.replace(/\D/g, '').length >= 10;
 
   const handleFinish = () => {
-    if (!selectedCategory || !selectedSubcategory) return;
+    if (!selectedCategory) return;
     registerVendor({
       businessName: businessName.trim(),
-      category: selectedCategory,
-      subcategory: selectedSubcategory,
-      locality: LOCALITIES.find(l => l.id === locality)?.name ?? 'Patuli',
-      whatsapp: '+91 ' + whatsapp.replace(/\D/g, '').slice(-10),
-      description: description.trim(),
+      category:     selectedCategory,
+      subcategory:  selectedSubcategory,
+      locality:     localityName,
+      whatsapp:     '+91 ' + whatsapp.replace(/\D/g, '').slice(-10),
+      description:  description.trim(),
     });
-    setStep('done');
+    setStep(4);
   };
 
-  const slideVariants = {
-    initial: { x: 40, opacity: 0 },
+  const slide = {
+    initial: { x: 32, opacity: 0 },
     animate: { x: 0,  opacity: 1 },
-    exit:    { x: -40, opacity: 0 },
+    exit:    { x: -32, opacity: 0 },
   };
 
   return (
@@ -57,124 +118,151 @@ export function VendorRegistration({ onClose }: Props) {
       className="absolute inset-0 z-50 flex flex-col"
       style={{ background: '#0D0D0D' }}
     >
-      {/* Header */}
-      <div className="flex-none flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#1A1A1A]">
-        <button
-          onClick={onClose}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-[#1A1A1A]"
-        >
-          <X size={18} color="#ADADAD" />
-        </button>
-        <div className="flex-1">
+      {/* ── Header ── */}
+      <div className="flex-none px-5 pt-5 pb-2 border-b border-[#1A1A1A]">
+        <div className="flex items-center gap-3 mb-3">
+          <button
+            onClick={onClose}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-[#1A1A1A]"
+          >
+            <X size={18} color="#ADADAD" />
+          </button>
           <h1 className="text-base font-bold text-[#EBEBEB]">Register as Vendor</h1>
-          <p className="text-xs text-[#5C5C5C]">
-            {step === 'basics'   && 'Step 1 of 3 — Business name'}
-            {step === 'category' && 'Step 2 of 3 — Category & service'}
-            {step === 'details'  && 'Step 3 of 3 — Contact & description'}
-            {step === 'done'     && 'All done!'}
-          </p>
         </div>
 
-        {/* Progress dots */}
-        {step !== 'done' && (
-          <div className="flex items-center gap-1.5">
-            {(['basics', 'category', 'details'] as RegistrationStep[]).map(s => (
-              <div
-                key={s}
-                className="rounded-full transition-all"
-                style={{
-                  width:      step === s ? 16 : 5,
-                  height:     5,
-                  background: step === s ? '#00C896'
-                    : (['basics', 'category', 'details'].indexOf(step) > ['basics', 'category', 'details'].indexOf(s))
-                      ? '#00C896' : '#2A2A2A',
-                }}
-              />
-            ))}
-          </div>
-        )}
+        {/* Step indicator */}
+        {step < 4 && <StepIndicator current={step} />}
       </div>
 
-      {/* Content */}
+      {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
         <AnimatePresence mode="wait">
 
-          {/* ── Step 1: Basics ── */}
-          {step === 'basics' && (
-            <motion.div
-              key="basics"
-              {...slideVariants}
-              transition={{ duration: 0.22 }}
-              className="px-5 pt-6 pb-8 flex flex-col gap-5"
-            >
-              <div className="flex flex-col items-center gap-3 mb-2">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'rgba(0,200,150,0.1)' }}>
-                  <Store size={26} color="#00C896" />
-                </div>
-                <div className="text-center">
-                  <h2 className="text-lg font-bold text-[#EBEBEB]">What's your business name?</h2>
-                  <p className="text-sm text-[#5C5C5C] mt-1">This is how customers will find you</p>
+          {/* ── Step 1: Basic Info ── */}
+          {step === 1 && (
+            <motion.div key="s1" {...slide} transition={{ duration: 0.2 }} className="px-5 pt-6 pb-8 flex flex-col gap-5">
+              <div>
+                <h2 className="text-lg font-bold text-[#EBEBEB] mb-1">Basic Information</h2>
+                <p className="text-sm text-[#5C5C5C]">Tell us about your business</p>
+              </div>
+
+              {/* Business Name */}
+              <div>
+                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
+                  Vendor / Business Name <span className="text-[#FF4D6A]">*</span>
+                </label>
+                <div className="flex items-center gap-2.5 px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616]">
+                  <Store size={15} color="#5C5C5C" />
+                  <input
+                    type="text"
+                    placeholder="Enter your business name"
+                    value={businessName}
+                    onChange={e => setBusinessName(e.target.value)}
+                    className="flex-1 bg-transparent outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A]"
+                  />
                 </div>
               </div>
 
+              {/* Category (dropdown-style) */}
               <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">Business Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Rahul's Tea Stall"
-                  value={businessName}
-                  onChange={e => setBusinessName(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616] outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A]"
-                />
+                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
+                  Category <span className="text-[#FF4D6A]">*</span>
+                </label>
+                <button
+                  onClick={() => setStep(2)}
+                  className="w-full flex items-center gap-2.5 px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616] text-left"
+                >
+                  {selectedCategory && selectedCatGroup ? (
+                    <>
+                      <span className="text-base">{selectedCatGroup.icon}</span>
+                      <span className="flex-1 text-sm text-[#EBEBEB]">{selectedSubcategory}</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-5 h-5 rounded flex items-center justify-center bg-[#2A2A2A]">
+                        <span className="text-[10px]">🏪</span>
+                      </div>
+                      <span className="flex-1 text-sm text-[#3A3A3A]">Select primary category</span>
+                    </>
+                  )}
+                  <ChevronRight size={16} color="#3A3A3A" />
+                </button>
               </div>
 
+              {/* WhatsApp */}
               <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">Your Locality</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {LOCALITIES.slice(0, 9).map(loc => (
-                    <button
-                      key={loc.id}
-                      onClick={() => setLocality(loc.id)}
-                      className="py-2 px-3 rounded-xl text-xs font-medium border transition-all"
-                      style={{
-                        background:  locality === loc.id ? 'rgba(0,200,150,0.12)' : '#161616',
-                        borderColor: locality === loc.id ? 'rgba(0,200,150,0.35)' : '#1E1E1E',
-                        color:       locality === loc.id ? '#00C896' : '#ADADAD',
-                      }}
-                    >
-                      {loc.name}
-                    </button>
-                  ))}
+                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
+                  WhatsApp Number <span className="text-[#FF4D6A]">*</span>
+                </label>
+                <div className="flex items-center gap-2 px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616]">
+                  <Phone size={15} color="#00C896" />
+                  <span className="text-sm text-[#ADADAD] font-medium">+91</span>
+                  <div className="w-px h-4 bg-[#2A2A2A]" />
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    placeholder="98765 43210"
+                    value={whatsapp}
+                    onChange={e => setWhatsapp(e.target.value.replace(/\D/g, ''))}
+                    className="flex-1 bg-transparent outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A]"
+                  />
+                </div>
+                <p className="text-[11px] text-[#3A3A3A] mt-1.5 px-1">Leads will contact you on WhatsApp</p>
+              </div>
+
+              {/* Go Live section — matches reference illustration area */}
+              <div
+                className="rounded-2xl border border-[rgba(0,200,150,0.15)] p-4"
+                style={{ background: 'rgba(0,200,150,0.04)' }}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-[#EBEBEB] mb-2">
+                      Go Live. Get Leads.
+                    </p>
+                    {[
+                      'Appear in nearby searches',
+                      'Get WhatsApp leads',
+                      'Build trust in your locality',
+                      'Grow your business',
+                    ].map(tip => (
+                      <div key={tip} className="flex items-center gap-2 mb-1.5">
+                        <CheckCircle2 size={12} color="#00C896" />
+                        <span className="text-xs text-[#ADADAD]">{tip}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Mini store illustration */}
+                  <div
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center flex-none"
+                    style={{ background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)' }}
+                  >
+                    <Store size={28} color="#00C896" strokeWidth={1.4} />
+                  </div>
                 </div>
               </div>
 
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setStep('category')}
-                disabled={!canProceedBasics}
-                className="py-3.5 rounded-2xl font-bold text-sm mt-2"
+                onClick={() => setStep(2)}
+                disabled={!canStep1}
+                className="py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2"
                 style={{
-                  background: canProceedBasics ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
-                  color: canProceedBasics ? 'white' : '#3A3A3A',
+                  background: canStep1 ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
+                  color: canStep1 ? 'white' : '#3A3A3A',
                 }}
               >
-                Continue →
+                Next: Category <ChevronRight size={16} />
               </motion.button>
             </motion.div>
           )}
 
           {/* ── Step 2: Category ── */}
-          {step === 'category' && (
-            <motion.div
-              key="category"
-              {...slideVariants}
-              transition={{ duration: 0.22 }}
-              className="px-5 pt-6 pb-8 flex flex-col gap-4"
-            >
-              <div className="text-center mb-2">
-                <h2 className="text-lg font-bold text-[#EBEBEB]">What do you offer?</h2>
-                <p className="text-sm text-[#5C5C5C] mt-1">Select a category, then pick your service</p>
+          {step === 2 && (
+            <motion.div key="s2" {...slide} transition={{ duration: 0.2 }} className="px-5 pt-6 pb-8 flex flex-col gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#EBEBEB] mb-1">Select Category</h2>
+                <p className="text-sm text-[#5C5C5C]">Pick the best match for your service</p>
               </div>
 
               {selectedCategory && selectedSubcategory && (
@@ -182,17 +270,12 @@ export function VendorRegistration({ onClose }: Props) {
                   className="flex items-center gap-2 px-4 py-3 rounded-xl border"
                   style={{ background: 'rgba(0,200,150,0.08)', borderColor: 'rgba(0,200,150,0.25)' }}
                 >
-                  <span className="text-base">{selectedCatGroup?.icon}</span>
+                  <span>{selectedCatGroup?.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-[#00C896]">{selectedCatGroup?.label}</p>
                     <p className="text-sm font-medium text-[#EBEBEB] truncate">{selectedSubcategory}</p>
                   </div>
-                  <button
-                    onClick={() => { setSelectedCategory(null); setSelectedSubcategory(''); }}
-                    className="text-xs text-[#5C5C5C]"
-                  >
-                    Change
-                  </button>
+                  <button onClick={() => { setSelectedCategory(null); setSelectedSubcategory(''); }} className="text-xs text-[#5C5C5C]">Change</button>
                 </div>
               )}
 
@@ -207,14 +290,9 @@ export function VendorRegistration({ onClose }: Props) {
                       <span className="flex-1 text-left text-sm font-semibold text-[#EBEBEB]">{group.label}</span>
                       {selectedCategory === group.id && selectedSubcategory && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                          style={{ background: 'rgba(0,200,150,0.12)', color: '#00C896' }}>
-                          Selected
-                        </span>
+                          style={{ background: 'rgba(0,200,150,0.12)', color: '#00C896' }}>✓</span>
                       )}
-                      {expandedCat === group.id
-                        ? <ChevronDown size={16} color="#5C5C5C" />
-                        : <ChevronRight size={16} color="#5C5C5C" />
-                      }
+                      {expandedCat === group.id ? <ChevronDown size={15} color="#5C5C5C" /> : <ChevronRight size={15} color="#5C5C5C" />}
                     </button>
 
                     <AnimatePresence>
@@ -230,19 +308,12 @@ export function VendorRegistration({ onClose }: Props) {
                             {group.subcategories.map(sub => (
                               <button
                                 key={sub}
-                                onClick={() => {
-                                  setSelectedCategory(group.id as VendorCategory);
-                                  setSelectedSubcategory(sub);
-                                  setExpandedCat(null);
-                                }}
+                                onClick={() => { setSelectedCategory(group.id as VendorCategory); setSelectedSubcategory(sub); setExpandedCat(null); }}
                                 className="px-3 py-1.5 rounded-full text-xs font-medium border transition-all"
                                 style={{
-                                  background:  selectedCategory === group.id && selectedSubcategory === sub
-                                    ? 'rgba(0,200,150,0.15)' : '#1A1A1A',
-                                  borderColor: selectedCategory === group.id && selectedSubcategory === sub
-                                    ? 'rgba(0,200,150,0.4)' : '#2A2A2A',
-                                  color:       selectedCategory === group.id && selectedSubcategory === sub
-                                    ? '#00C896' : '#ADADAD',
+                                  background:  selectedCategory === group.id && selectedSubcategory === sub ? 'rgba(0,200,150,0.15)' : '#1A1A1A',
+                                  borderColor: selectedCategory === group.id && selectedSubcategory === sub ? 'rgba(0,200,150,0.4)'  : '#2A2A2A',
+                                  color:       selectedCategory === group.id && selectedSubcategory === sub ? '#00C896' : '#ADADAD',
                                 }}
                               >
                                 {sub}
@@ -256,65 +327,71 @@ export function VendorRegistration({ onClose }: Props) {
                 ))}
               </div>
 
-              <div className="flex gap-3 mt-2">
-                <button
-                  onClick={() => setStep('basics')}
-                  className="flex-none px-5 py-3.5 rounded-2xl font-bold text-sm bg-[#1A1A1A] text-[#ADADAD]"
-                >
-                  ← Back
-                </button>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setStep('details')}
-                  disabled={!canProceedCategory}
-                  className="flex-1 py-3.5 rounded-2xl font-bold text-sm"
+              <div className="flex gap-3">
+                <button onClick={() => setStep(1)} className="flex-none px-5 py-4 rounded-2xl font-bold text-sm bg-[#1A1A1A] text-[#ADADAD]">← Back</button>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep(3)} disabled={!canStep2}
+                  className="flex-1 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2"
                   style={{
-                    background: canProceedCategory ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
-                    color: canProceedCategory ? 'white' : '#3A3A3A',
-                  }}
-                >
-                  Continue →
+                    background: canStep2 ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
+                    color: canStep2 ? 'white' : '#3A3A3A',
+                  }}>
+                  Next: Locality <ChevronRight size={16} />
                 </motion.button>
               </div>
             </motion.div>
           )}
 
-          {/* ── Step 3: Details ── */}
-          {step === 'details' && (
-            <motion.div
-              key="details"
-              {...slideVariants}
-              transition={{ duration: 0.22 }}
-              className="px-5 pt-6 pb-8 flex flex-col gap-5"
-            >
-              <div className="text-center mb-2">
-                <h2 className="text-lg font-bold text-[#EBEBEB]">Contact & description</h2>
-                <p className="text-sm text-[#5C5C5C] mt-1">Help customers reach you</p>
+          {/* ── Step 3: Locality ── */}
+          {step === 3 && (
+            <motion.div key="s3" {...slide} transition={{ duration: 0.2 }} className="px-5 pt-6 pb-8 flex flex-col gap-5">
+              <div>
+                <h2 className="text-lg font-bold text-[#EBEBEB] mb-1">Your Locality</h2>
+                <p className="text-sm text-[#5C5C5C]">Where is your business located?</p>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  WhatsApp Number
-                </label>
-                <div className="flex items-center gap-2 px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616]">
-                  <Phone size={15} color="#5C5C5C" />
-                  <span className="text-sm text-[#ADADAD] font-medium">+91</span>
-                  <div className="w-px h-4 bg-[#2A2A2A]" />
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    placeholder="10-digit number"
-                    value={whatsapp}
-                    onChange={e => setWhatsapp(e.target.value.replace(/\D/g, ''))}
-                    className="flex-1 bg-transparent outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A]"
-                  />
+              {/* Detected locality */}
+              <div
+                className="flex items-center gap-3 px-4 py-3.5 rounded-2xl border"
+                style={{ background: 'rgba(0,200,150,0.06)', borderColor: 'rgba(0,200,150,0.2)' }}
+              >
+                <MapPin size={18} color="#00C896" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[#EBEBEB]">Detected: {localityName}, Kolkata</p>
+                  <p className="text-xs text-[#5C5C5C] mt-0.5">You can change it if needed</p>
                 </div>
-                <p className="text-xs text-[#3A3A3A] mt-1.5 px-1">Customers will reach you on WhatsApp</p>
+                <button className="text-[#5C5C5C]">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M11.333 2a1.5 1.5 0 0 1 2.12 2.12L5.667 11.908 2 12.667l.76-3.667L11.333 2z" stroke="#5C5C5C" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
               </div>
 
               <div>
+                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2.5 block">
+                  Select Locality
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {LOCALITIES.slice(0, 9).map(loc => (
+                    <button
+                      key={loc.id}
+                      onClick={() => setLocality(loc.id)}
+                      className="py-2.5 px-2 rounded-xl text-xs font-medium border transition-all text-center"
+                      style={{
+                        background:  locality === loc.id ? 'rgba(0,200,150,0.12)' : '#161616',
+                        borderColor: locality === loc.id ? 'rgba(0,200,150,0.35)' : '#1E1E1E',
+                        color:       locality === loc.id ? '#00C896' : '#ADADAD',
+                      }}
+                    >
+                      {loc.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
                 <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Description <span className="text-[#3A3A3A] font-normal normal-case">(optional)</span>
+                  Description <span className="font-normal normal-case text-[#3A3A3A]">(optional)</span>
                 </label>
                 <textarea
                   placeholder="Tell customers what makes your business special..."
@@ -325,52 +402,24 @@ export function VendorRegistration({ onClose }: Props) {
                 />
               </div>
 
-              {/* Summary card */}
-              <div className="rounded-2xl border border-[#2A2A2A] bg-[#161616] p-4 flex flex-col gap-2">
-                <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest mb-1">Summary</p>
-                <div className="flex items-center gap-2">
-                  <Store size={13} color="#5C5C5C" />
-                  <span className="text-sm font-semibold text-[#EBEBEB]">{businessName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{selectedCatGroup?.icon}</span>
-                  <span className="text-xs text-[#ADADAD]">{selectedSubcategory}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin size={13} color="#5C5C5C" />
-                  <span className="text-xs text-[#ADADAD]">
-                    {LOCALITIES.find(l => l.id === locality)?.name}
-                  </span>
-                </div>
-              </div>
-
               <div className="flex gap-3">
-                <button
-                  onClick={() => setStep('category')}
-                  className="flex-none px-5 py-3.5 rounded-2xl font-bold text-sm bg-[#1A1A1A] text-[#ADADAD]"
-                >
-                  ← Back
-                </button>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleFinish}
-                  disabled={!canProceedDetails}
-                  className="flex-1 py-3.5 rounded-2xl font-bold text-sm"
+                <button onClick={() => setStep(2)} className="flex-none px-5 py-4 rounded-2xl font-bold text-sm bg-[#1A1A1A] text-[#ADADAD]">← Back</button>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleFinish} disabled={!canFinish}
+                  className="flex-1 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2"
                   style={{
-                    background: canProceedDetails ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
-                    color: canProceedDetails ? 'white' : '#3A3A3A',
-                  }}
-                >
-                  Register Business
+                    background: canFinish ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
+                    color: canFinish ? 'white' : '#3A3A3A',
+                  }}>
+                  <Zap size={15} fill={canFinish ? 'white' : 'none'} /> Go Live
                 </motion.button>
               </div>
             </motion.div>
           )}
 
-          {/* ── Done ── */}
-          {step === 'done' && (
+          {/* ── Step 4: Done ── */}
+          {step === 4 && (
             <motion.div
-              key="done"
+              key="s4"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.3, type: 'spring' }}
@@ -390,29 +439,27 @@ export function VendorRegistration({ onClose }: Props) {
                 <h2 className="text-2xl font-bold text-[#EBEBEB]">You're registered!</h2>
                 <p className="text-sm text-[#5C5C5C] mt-2 leading-relaxed max-w-xs">
                   <span className="text-[#EBEBEB] font-semibold">{businessName}</span> is now live on GeoHood.
-                  Customers in {LOCALITIES.find(l => l.id === locality)?.name} can find you.
+                  Customers in {localityName} can find you.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-[#2A2A2A] bg-[#161616] p-4 w-full text-left">
                 <p className="text-[10px] font-semibold text-[#5C5C5C] uppercase tracking-widest mb-3">Next steps</p>
-                <div className="flex flex-col gap-2">
-                  {['Go to Vendor Dashboard to toggle Live/Closed', 'Share your GeoHood profile with customers', 'Get verified for a trusted badge'].map((tip, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <div className="w-4 h-4 rounded-full flex-none flex items-center justify-center text-[10px] font-bold mt-0.5"
-                        style={{ background: 'rgba(0,200,150,0.12)', color: '#00C896' }}>
-                        {i + 1}
-                      </div>
-                      <p className="text-xs text-[#ADADAD]">{tip}</p>
+                {['Go to Vendor Dashboard to set yourself Live', 'Share your profile to attract customers', 'Get verified for a trusted badge'].map((tip, i) => (
+                  <div key={i} className="flex items-start gap-2 mb-2 last:mb-0">
+                    <div className="w-4 h-4 rounded-full flex-none flex items-center justify-center text-[10px] font-bold mt-0.5"
+                      style={{ background: 'rgba(0,200,150,0.12)', color: '#00C896' }}>
+                      {i + 1}
                     </div>
-                  ))}
-                </div>
+                    <p className="text-xs text-[#ADADAD]">{tip}</p>
+                  </div>
+                ))}
               </div>
 
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={onClose}
-                className="w-full py-3.5 rounded-2xl font-bold text-white text-sm mt-2"
+                className="w-full py-4 rounded-2xl font-bold text-white text-sm"
                 style={{ background: 'linear-gradient(135deg, #00C896, #0aa87a)' }}
               >
                 Go to Dashboard →
