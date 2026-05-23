@@ -1,6 +1,8 @@
-import React from 'react';
-import { Users, Shield, Bell, ChevronRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { Users, Shield, Bell, ChevronRight, Building2, Home } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useUser } from '../context/UserContext';
+import { SocietyOnboarding } from './SocietyOnboarding';
 
 const NOTICES = [
   { id: 'n1', title: 'Water Supply Interruption', body: 'Scheduled maintenance on 21st May, 6 AM – 2 PM. Please store water in advance.', category: 'maintenance', date: '19 May', urgent: true },
@@ -17,16 +19,75 @@ const CATEGORY_COLOR: Record<string, string> = {
 };
 
 export function SocietyScreen() {
+  const { residence, hasSeenSocietyOnboarding, markSocietyOnboardingSeen } = useUser();
+  const [showOnboarding, setShowOnboarding] = useState(
+    !hasSeenSocietyOnboarding && !residence
+  );
+
+  const handleOnboardingClose = () => {
+    markSocietyOnboardingSeen();
+    setShowOnboarding(false);
+  };
+
+  const residenceLabel = residence
+    ? residence.type === 'society'
+      ? `${residence.societyName} · ${residence.flatNumber}`
+      : `${residence.homeLabel}`
+    : null;
+
   return (
-    <div className="flex flex-col h-full bg-[#0D0D0D]">
+    <div className="flex flex-col h-full bg-[#0D0D0D] relative">
       {/* Header */}
       <div className="flex-none px-5 pt-5 pb-4 border-b border-[#1A1A1A]">
         <div className="flex items-center gap-2 mb-1">
           <Users size={18} color="#00C896" />
           <h1 className="text-lg font-bold text-[#EBEBEB]">Society</h1>
         </div>
-        <p className="text-xs text-[#5C5C5C]">Patuli Housing Estate · 1,240 members</p>
+        {residenceLabel ? (
+          <p className="text-xs text-[#5C5C5C]">{residenceLabel} · 1,240 members</p>
+        ) : (
+          <button
+            onClick={() => setShowOnboarding(true)}
+            className="flex items-center gap-1 text-xs font-semibold mt-0.5"
+            style={{ color: '#00C896' }}
+          >
+            Register your residence →
+          </button>
+        )}
       </div>
+
+      {/* Residence card (if registered) */}
+      {residence && (
+        <div className="px-5 pt-4">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-[#2A2A2A] bg-[#161616] px-4 py-3 flex items-center gap-3"
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-none"
+              style={{ background: 'rgba(0,200,150,0.1)' }}>
+              {residence.type === 'society'
+                ? <Building2 size={18} color="#00C896" />
+                : <Home size={18} color="#4D9EFF" />
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#EBEBEB] truncate">
+                {residence.type === 'society' ? residence.societyName : residence.homeLabel}
+              </p>
+              <p className="text-xs text-[#5C5C5C]">
+                {residence.type === 'society' ? `Flat ${residence.flatNumber} · ${residence.role}` : residence.address}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowOnboarding(true)}
+              className="text-xs text-[#3A3A3A]"
+            >
+              Edit
+            </button>
+          </motion.div>
+        </div>
+      )}
 
       {/* Trust score card */}
       <div className="px-5 pt-4 pb-3">
@@ -49,7 +110,7 @@ export function SocietyScreen() {
         </motion.div>
       </div>
 
-      {/* Notices */}
+      {/* Notice board */}
       <div className="flex-1 overflow-y-auto px-5 pb-6" style={{ scrollbarWidth: 'none' }}>
         <div className="flex items-center gap-2 mb-3">
           <Bell size={14} color="#5C5C5C" />
@@ -82,7 +143,33 @@ export function SocietyScreen() {
             );
           })}
         </div>
+
+        {/* CTA if not registered */}
+        {!residence && (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setShowOnboarding(true)}
+            className="w-full mt-4 flex items-center justify-between px-5 py-4 rounded-2xl border"
+            style={{
+              background:   'rgba(0,200,150,0.06)',
+              borderColor:  'rgba(0,200,150,0.2)',
+            }}
+          >
+            <div className="text-left">
+              <p className="text-sm font-bold text-[#EBEBEB]">Register your residence</p>
+              <p className="text-xs text-[#5C5C5C] mt-0.5">Get personalised local alerts</p>
+            </div>
+            <ChevronRight size={18} color="#00C896" />
+          </motion.button>
+        )}
       </div>
+
+      {/* Society Onboarding overlay */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <SocietyOnboarding onClose={handleOnboardingClose} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

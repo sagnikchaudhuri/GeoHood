@@ -7,7 +7,7 @@ export const MOCK_VENDORS: Vendor[] = [
     id: 'v001',
     name: 'Bong Bites Kitchen',
     category: 'food',
-    subcategory: 'Bengali Home Food',
+    subcategory: 'Tiffin Service',
     description: 'Authentic Bengali home-style cooking. Daily specials with fish curry, dal and rice. Family-run since 2011.',
     rating: 4.7,
     reviewCount: 312,
@@ -27,12 +27,13 @@ export const MOCK_VENDORS: Vendor[] = [
     features: ['Home Delivery', 'Takeaway', 'Pure Veg Option'],
     tags: ['fish curry', 'luchi', 'mishti doi', 'tiffin'],
     offers: '10% off on orders above ₹250',
+    locality: 'Patuli',
   },
   {
     id: 'v002',
     name: 'Cafe Adda',
     category: 'food',
-    subcategory: 'Café & Snacks',
+    subcategory: 'Fast Food',
     description: 'The neighborhood hangout. Sandwiches, momos, and cold coffee. Student-friendly prices.',
     rating: 4.3,
     reviewCount: 198,
@@ -50,12 +51,13 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3981,
     features: ['Dine-in', 'Takeaway', 'WiFi'],
     tags: ['momos', 'sandwiches', 'coffee', 'snacks'],
+    locality: 'Patuli',
   },
   {
     id: 'v003',
     name: 'Meghna Tiffin Centre',
     category: 'food',
-    subcategory: 'Tiffin & Lunch',
+    subcategory: 'Tiffin Service',
     description: 'Freshly made tiffins and lunch boxes. Subscription packs available for working professionals.',
     rating: 4.5,
     reviewCount: 267,
@@ -74,12 +76,13 @@ export const MOCK_VENDORS: Vendor[] = [
     features: ['Tiffin Subscription', 'Home Delivery'],
     tags: ['tiffin', 'lunch box', 'roti', 'sabzi', 'dal'],
     offers: 'Monthly subscription ₹2400',
+    locality: 'Patuli',
   },
   {
     id: 'v004',
     name: 'Roshni Rolls & Wraps',
     category: 'food',
-    subcategory: 'Rolls & Fast Food',
+    subcategory: 'Rolls',
     description: 'Kathi rolls, wraps, and frankie. Best egg roll in South Kolkata — ask anyone in Patuli.',
     rating: 4.6,
     reviewCount: 441,
@@ -97,6 +100,7 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3969,
     features: ['Takeaway', 'Parcel'],
     tags: ['egg roll', 'kathi roll', 'frankie', 'wrap'],
+    locality: 'Patuli',
   },
 
   // ── Grocery ───────────────────────────────────────────────────────────────
@@ -104,7 +108,7 @@ export const MOCK_VENDORS: Vendor[] = [
     id: 'v005',
     name: 'Patuli Bazar Store',
     category: 'grocery',
-    subcategory: 'General Grocery',
+    subcategory: 'General Store / Kirana',
     description: 'Everything from atta to onions. Daily essentials, regional pulses, and fresh produce. Home delivery available.',
     rating: 4.2,
     reviewCount: 523,
@@ -124,12 +128,13 @@ export const MOCK_VENDORS: Vendor[] = [
     features: ['Home Delivery', 'UPI Accepted', 'Fresh Produce'],
     tags: ['atta', 'rice', 'dal', 'vegetables', 'oil'],
     offers: 'Free delivery on orders above ₹500',
+    locality: 'Patuli',
   },
   {
     id: 'v006',
     name: 'Quick Kirana',
     category: 'grocery',
-    subcategory: 'Kirana / Convenience',
+    subcategory: 'General Store / Kirana',
     description: 'Open late. Quick stop for forgotten groceries — chips, drinks, packaged foods, and daily essentials.',
     rating: 3.9,
     reviewCount: 187,
@@ -147,6 +152,7 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.4002,
     features: ['Late Night', 'UPI Accepted'],
     tags: ['kirana', 'snacks', 'drinks', 'packaged food'],
+    locality: 'Garia',
   },
 
   // ── Medical ───────────────────────────────────────────────────────────────
@@ -172,12 +178,13 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3988,
     features: ['Walk-in', 'Appointment', 'BP Check', 'Diabetes Management'],
     tags: ['doctor', 'GP', 'general physician', 'consultation'],
+    locality: 'Patuli',
   },
   {
     id: 'v008',
     name: 'Swasthya Diagnostic Centre',
     category: 'medical',
-    subcategory: 'Diagnostic / Lab',
+    subcategory: 'Diagnostic Lab',
     description: 'Blood tests, ECG, X-ray, and ultrasound. NABL accredited. Home sample collection available.',
     rating: 4.5,
     reviewCount: 348,
@@ -197,6 +204,7 @@ export const MOCK_VENDORS: Vendor[] = [
     features: ['Home Sample Collection', 'NABL Accredited', 'Online Reports'],
     tags: ['blood test', 'ECG', 'X-ray', 'ultrasound', 'lab'],
     offers: '15% off on full body checkup',
+    locality: 'Garia',
   },
 
   // ── Pharmacy ──────────────────────────────────────────────────────────────
@@ -204,7 +212,7 @@ export const MOCK_VENDORS: Vendor[] = [
     id: 'v009',
     name: 'MedPlus Patuli',
     category: 'pharmacy',
-    subcategory: 'Pharmacy Chain',
+    subcategory: 'Pharmacy / Medical Store',
     description: 'Wide range of medicines, surgical supplies, and health products. Verified pharmacist on duty.',
     rating: 4.4,
     reviewCount: 621,
@@ -223,12 +231,13 @@ export const MOCK_VENDORS: Vendor[] = [
     features: ['Prescription Required', 'Home Delivery', 'Generic Medicines'],
     tags: ['medicine', 'pharmacy', 'health', 'surgical'],
     offers: 'Up to 20% off on generic medicines',
+    locality: 'Patuli',
   },
   {
     id: 'v010',
     name: 'Jana Aushadhi Kendra',
     category: 'pharmacy',
-    subcategory: 'Generic Pharmacy (Govt)',
+    subcategory: 'Generic Medicine Store',
     description: 'Government-authorized generic medicine store. 60–80% cheaper than branded drugs. Same efficacy.',
     rating: 4.3,
     reviewCount: 289,
@@ -246,6 +255,7 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3996,
     features: ['Generic Medicines', 'Govt Certified', 'Low Cost'],
     tags: ['generic medicine', 'cheap medicine', 'jan aushadhi'],
+    locality: 'Patuli',
   },
 
   // ── Repair ────────────────────────────────────────────────────────────────
@@ -253,7 +263,7 @@ export const MOCK_VENDORS: Vendor[] = [
     id: 'v011',
     name: 'FixIt Electronics',
     category: 'repair',
-    subcategory: 'Mobile & Electronics Repair',
+    subcategory: 'Mobile / Phone Repair',
     description: 'Phone screen replacement, battery swap, charging port repair, laptop servicing. Quick turnaround.',
     rating: 4.6,
     reviewCount: 412,
@@ -271,12 +281,13 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3979,
     features: ['Warranty on Repair', 'Screen Replacement', 'Laptop Service'],
     tags: ['mobile repair', 'phone repair', 'screen replacement', 'laptop'],
+    locality: 'Patuli',
   },
   {
     id: 'v012',
     name: 'AC & Appliance Care',
     category: 'repair',
-    subcategory: 'Home Appliance Service',
+    subcategory: 'AC Repair',
     description: 'AC servicing, washing machine repair, refrigerator repair. Doorstep service in Patuli and surroundings.',
     rating: 4.4,
     reviewCount: 178,
@@ -296,12 +307,13 @@ export const MOCK_VENDORS: Vendor[] = [
     features: ['Doorstep Service', 'AC Servicing', 'Washing Machine', 'Refrigerator'],
     tags: ['AC service', 'washing machine repair', 'appliance repair'],
     offers: 'Free doorstep visit on first service',
+    locality: 'Santoshpur',
   },
   {
     id: 'v013',
     name: 'Dilip Plumbing Works',
     category: 'repair',
-    subcategory: 'Plumbing',
+    subcategory: 'Plumber',
     description: 'Pipe leaks, tap replacement, bathroom fittings, drainage issues. Emergency calls accepted.',
     rating: 4.1,
     reviewCount: 93,
@@ -319,14 +331,15 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3971,
     features: ['Emergency Calls', 'Bathroom Fittings', 'Pipe Repair'],
     tags: ['plumber', 'pipe leak', 'bathroom fitting', 'drainage'],
+    locality: 'Patuli',
   },
 
-  // ── Salon ─────────────────────────────────────────────────────────────────
+  // ── Beauty ────────────────────────────────────────────────────────────────
   {
     id: 'v014',
     name: 'Glam Studio Patuli',
-    category: 'salon',
-    subcategory: 'Unisex Salon',
+    category: 'beauty',
+    subcategory: "Women's Salon",
     description: 'Haircut, color, facial, threading, waxing, and bridal packages. AC interior with trained stylists.',
     rating: 4.5,
     reviewCount: 534,
@@ -346,13 +359,14 @@ export const MOCK_VENDORS: Vendor[] = [
     features: ['AC Salon', 'Bridal Package', 'Walk-in', 'Appointment'],
     tags: ['haircut', 'color', 'facial', 'waxing', 'threading', 'bridal'],
     offers: 'Flat ₹100 off on first visit',
+    locality: 'Patuli',
   },
   {
     id: 'v015',
-    name: 'Babu\'s Hair Palace',
-    category: 'salon',
-    subcategory: 'Men\'s Barber',
-    description: 'Classic men\'s haircuts, beard shaping, and head massage. No appointment needed.',
+    name: "Babu's Hair Palace",
+    category: 'beauty',
+    subcategory: "Men's Barber / Salon",
+    description: "Classic men's haircuts, beard shaping, and head massage. No appointment needed.",
     rating: 4.3,
     reviewCount: 276,
     isOpen: true,
@@ -368,7 +382,8 @@ export const MOCK_VENDORS: Vendor[] = [
     lat: 22.4733,
     lng: 88.3993,
     features: ['Walk-in', 'Head Massage', 'Beard Shaping'],
-    tags: ['barber', 'haircut', 'beard', 'men\'s salon'],
+    tags: ['barber', 'haircut', 'beard', "men's salon"],
+    locality: 'Patuli',
   },
 
   // ── Transport ─────────────────────────────────────────────────────────────
@@ -394,12 +409,13 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3978,
     features: ['Shared Rides', 'Fixed Routes', 'Night Service'],
     tags: ['auto', 'rickshaw', 'Garia', 'transport'],
+    locality: 'Patuli',
   },
   {
     id: 'v017',
     name: 'Rajesh Cab Service',
     category: 'transport',
-    subcategory: 'Cab / Car Rental',
+    subcategory: 'Cab / Taxi',
     description: 'Airport drops, outstation trips, local rentals. AC cars, reliable drivers, advance booking.',
     rating: 4.6,
     reviewCount: 189,
@@ -418,6 +434,7 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.4008,
     features: ['Airport Drop', 'AC Cars', 'Advance Booking', 'Outstation'],
     tags: ['cab', 'airport', 'outstation', 'car hire'],
+    locality: 'Mukundapur',
   },
 
   // ── Other ─────────────────────────────────────────────────────────────────
@@ -443,6 +460,7 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3991,
     features: ['Printing', 'Scanning', 'Aadhar Update', 'PAN Card'],
     tags: ['print', 'scan', 'Aadhar', 'PAN', 'cyber café', 'documents'],
+    locality: 'Patuli',
   },
   {
     id: 'v019',
@@ -465,12 +483,13 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3980,
     features: ['24/7', 'All Banks Accepted'],
     tags: ['ATM', 'SBI', 'cash withdrawal'],
+    locality: 'Patuli',
   },
   {
     id: 'v020',
     name: 'Patuli Laundry & Dry Clean',
-    category: 'other',
-    subcategory: 'Laundry',
+    category: 'home_services',
+    subcategory: 'Laundry / Dry Clean',
     description: 'Clothes washing, ironing, and dry cleaning. Pickup and delivery within Patuli.',
     rating: 4.2,
     reviewCount: 145,
@@ -489,11 +508,12 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.3966,
     features: ['Pickup & Delivery', 'Dry Clean', 'Ironing'],
     tags: ['laundry', 'dry clean', 'ironing', 'clothes wash'],
+    locality: 'Patuli',
   },
   {
     id: 'v021',
     name: 'Sukh Stationers & Books',
-    category: 'other',
+    category: 'local_shops',
     subcategory: 'Stationery & Books',
     description: 'School supplies, textbooks, art materials, and office stationery. Photocopying on-site.',
     rating: 4.1,
@@ -512,6 +532,7 @@ export const MOCK_VENDORS: Vendor[] = [
     lng: 88.4005,
     features: ['Photocopy', 'Books', 'Art Supplies'],
     tags: ['stationery', 'books', 'photocopy', 'school supplies'],
+    locality: 'Baghajatin',
   },
 ];
 
@@ -539,6 +560,10 @@ export function searchVendors(query: string): Vendor[] {
     v.description.toLowerCase().includes(q) ||
     v.tags.some(t => t.toLowerCase().includes(q))
   );
+}
+
+export function getVendorsByLocality(locality: string): Vendor[] {
+  return MOCK_VENDORS.filter(v => v.locality.toLowerCase() === locality.toLowerCase());
 }
 
 export function getNearbyVendors(maxKm = 1.0): Vendor[] {

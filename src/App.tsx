@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AppProvider, useAppContext } from './context/AppContext';
-import { BottomNavBar } from './components/layout/BottomNavBar';
-import { VendorDetailSheet } from './components/cards/VendorDetailSheet';
-import { HomeScreen }    from './pages/HomeScreen';
-import { MapScreen }     from './pages/MapScreen';
-import { SearchScreen }  from './pages/SearchScreen';
-import { SocietyScreen } from './pages/SocietyScreen';
-import { ProfileScreen } from './pages/ProfileScreen';
+import { UserProvider, useUser }      from './context/UserContext';
+import { BottomNavBar }              from './components/layout/BottomNavBar';
+import { VendorDetailSheet }         from './components/cards/VendorDetailSheet';
+import { OnboardingScreen }          from './pages/OnboardingScreen';
+import { VendorRegistration }        from './pages/VendorRegistration';
+import { VendorDashboard }           from './pages/VendorDashboard';
+import { HomeScreen }                from './pages/HomeScreen';
+import { MapScreen }                 from './pages/MapScreen';
+import { SearchScreen }              from './pages/SearchScreen';
+import { SocietyScreen }             from './pages/SocietyScreen';
+import { ProfileScreen }             from './pages/ProfileScreen';
 import { TabName } from './types';
 
 function renderScreen(tab: TabName) {
@@ -22,7 +26,13 @@ function renderScreen(tab: TabName) {
 }
 
 function AppShell() {
-  const { activeTab } = useAppContext();
+  const { activeTab }        = useAppContext();
+  const { myVendor }         = useUser();
+  const [vendorModal, setVendorModal] = useState<'register' | 'dashboard' | null>(null);
+
+  const handleVendorPress = () => {
+    setVendorModal(myVendor ? 'dashboard' : 'register');
+  };
 
   return (
     <div
@@ -54,18 +64,56 @@ function AppShell() {
       </div>
 
       {/* Bottom nav */}
-      <BottomNavBar />
+      <BottomNavBar onVendorPress={handleVendorPress} />
 
-      {/* Global overlays */}
+      {/* Global vendor detail overlay */}
       <VendorDetailSheet />
+
+      {/* Vendor Registration / Dashboard overlay */}
+      <AnimatePresence>
+        {vendorModal === 'register' && (
+          <VendorRegistration onClose={() => setVendorModal(null)} />
+        )}
+        {vendorModal === 'dashboard' && (
+          <VendorDashboard onClose={() => setVendorModal(null)} />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function GatedApp() {
+  const { hasOnboarded } = useUser();
+
+  if (!hasOnboarded) {
+    return (
+      <div
+        style={{
+          width:    '100%',
+          maxWidth: '480px',
+          height:   '100dvh',
+          margin:   '0 auto',
+          background: '#0D0D0D',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <OnboardingScreen />
+      </div>
+    );
+  }
+
+  return (
+    <AppProvider>
+      <AppShell />
+    </AppProvider>
   );
 }
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppShell />
-    </AppProvider>
+    <UserProvider>
+      <GatedApp />
+    </UserProvider>
   );
 }

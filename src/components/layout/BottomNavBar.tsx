@@ -1,23 +1,32 @@
 import React from 'react';
-import { Home, Map, Users, User, Plus } from 'lucide-react';
+import { Home, Map, Users, User, Plus, LayoutDashboard } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAppContext } from '../../context/AppContext';
+import { useUser } from '../../context/UserContext';
 
 type NavTab = 'home' | 'map' | 'add' | 'society' | 'profile';
 
 const TABS: { id: NavTab; icon?: React.ElementType; label: string }[] = [
-  { id: 'home',    icon: Home,  label: 'Home'         },
-  { id: 'map',     icon: Map,   label: 'Map'          },
-  { id: 'add',                  label: '+ for Vendor' },
-  { id: 'society', icon: Users, label: 'Society'      },
-  { id: 'profile', icon: User,  label: 'Profile'      },
+  { id: 'home',    icon: Home,  label: 'Home'    },
+  { id: 'map',     icon: Map,   label: 'Map'     },
+  { id: 'add',                  label: 'Vendor'  },
+  { id: 'society', icon: Users, label: 'Society' },
+  { id: 'profile', icon: User,  label: 'Profile' },
 ];
 
-export function BottomNavBar() {
+interface Props {
+  onVendorPress: () => void;
+}
+
+export function BottomNavBar({ onVendorPress }: Props) {
   const { activeTab, setActiveTab } = useAppContext();
+  const { myVendor } = useUser();
 
   const handlePress = (id: NavTab) => {
-    if (id === 'add') return; // FAB — future modal
+    if (id === 'add') {
+      onVendorPress();
+      return;
+    }
     setActiveTab(id as any);
   };
 
@@ -42,15 +51,24 @@ export function BottomNavBar() {
               className="flex-1 flex flex-col items-center justify-center gap-1"
               onClick={() => handlePress('add')}
             >
-              {/* Raised teal FAB */}
+              {/* Raised FAB — teal if no vendor, teal-dim with dashboard icon if vendor */}
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center -mt-5 shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #00C896, #0aa87a)' }}
+                className="w-12 h-12 rounded-full flex items-center justify-center -mt-5 shadow-lg transition-all"
+                style={{
+                  background: myVendor
+                    ? 'linear-gradient(135deg, #1A3A2F, #0D2A20)'
+                    : 'linear-gradient(135deg, #00C896, #0aa87a)',
+                  border: myVendor ? '1.5px solid rgba(0,200,150,0.35)' : 'none',
+                }}
               >
-                <Plus size={22} color="white" strokeWidth={2.5} />
+                {myVendor
+                  ? <LayoutDashboard size={20} color="#00C896" strokeWidth={2} />
+                  : <Plus size={22} color="white" strokeWidth={2.5} />
+                }
               </div>
-              <span className="text-[9px] font-semibold text-[#5C5C5C] uppercase tracking-wide">
-                + for Vendor
+              <span className="text-[9px] font-semibold uppercase tracking-wide"
+                style={{ color: myVendor ? '#00C896' : '#5C5C5C' }}>
+                {myVendor ? 'Dashboard' : '+ Vendor'}
               </span>
             </button>
           );
