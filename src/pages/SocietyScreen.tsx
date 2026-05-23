@@ -33,7 +33,7 @@ export function SocietyScreen() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-[#1E1E1E] bg-[#161616] p-4 flex items-center gap-4"
+          className="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 flex items-center gap-4"
         >
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-[rgba(0,200,150,0.1)]">
             <Shield size={24} color="#00C896" />
@@ -65,7 +65,7 @@ export function SocietyScreen() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.06 }}
-                className="rounded-xl border border-[#1E1E1E] bg-[#161616] p-4"
+                className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4"
                 style={{ borderLeft: `3px solid ${color}` }}
               >
                 <div className="flex items-start justify-between gap-2 mb-1">

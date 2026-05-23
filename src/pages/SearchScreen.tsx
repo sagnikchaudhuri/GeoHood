@@ -34,14 +34,15 @@ export function SearchScreen() {
     <div className="flex flex-col h-full bg-[#0D0D0D]">
       {/* Search header */}
       <div className="flex-none px-5 pt-5 pb-3" style={{ borderBottom: '1px solid #1A1A1A' }}>
-        <div className="flex items-center gap-2 px-3.5 py-3 rounded-2xl bg-[#161616] border border-[#222222] focus-within:border-[rgba(0,200,150,0.4)] transition-colors">
+        <div className="flex items-center gap-2 px-3.5 py-3 rounded-2xl border transition-colors"
+          style={{ background: '#161616', borderColor: localQuery ? 'rgba(0,200,150,0.4)' : '#2A2A2A' }}
+        >
           <Search size={17} color="#5C5C5C" />
           <input
             type="text"
             placeholder="Search vendors, services, tags…"
             value={localQuery}
             onChange={e => handleChange(e.target.value)}
-            autoFocus
             className="flex-1 bg-transparent outline-none text-sm text-[#EBEBEB] placeholder:text-[#5C5C5C]"
           />
           {localQuery && (
