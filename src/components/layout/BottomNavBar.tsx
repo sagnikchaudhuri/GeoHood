@@ -1,17 +1,17 @@
 import React from 'react';
-import { Home, Map, Users, User, Plus, LayoutDashboard } from 'lucide-react';
+import { Home, Map, Plus, Users, Handshake, LayoutDashboard } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAppContext } from '../../context/AppContext';
 import { useUser } from '../../context/UserContext';
 
-type NavTab = 'home' | 'map' | 'add' | 'society' | 'profile';
+type NavTab = 'home' | 'map' | 'add' | 'society' | 'community';
 
 const TABS: { id: NavTab; icon?: React.ElementType; label: string }[] = [
-  { id: 'home',    icon: Home,  label: 'Home'    },
-  { id: 'map',     icon: Map,   label: 'Map'     },
-  { id: 'add',                  label: 'Vendor'  },
-  { id: 'society', icon: Users, label: 'Society' },
-  { id: 'profile', icon: User,  label: 'Profile' },
+  { id: 'home',      icon: Home,      label: 'Home'      },
+  { id: 'map',       icon: Map,       label: 'Map'       },
+  { id: 'add',                        label: 'Vendor'    },
+  { id: 'society',   icon: Users,     label: 'Society'   },
+  { id: 'community', icon: Handshake, label: 'Community' },
 ];
 
 interface Props {
@@ -20,13 +20,10 @@ interface Props {
 
 export function BottomNavBar({ onVendorPress }: Props) {
   const { activeTab, setActiveTab } = useAppContext();
-  const { myVendor } = useUser();
+  const { myVendor }                = useUser();
 
   const handlePress = (id: NavTab) => {
-    if (id === 'add') {
-      onVendorPress();
-      return;
-    }
+    if (id === 'add') { onVendorPress(); return; }
     setActiveTab(id as any);
   };
 
@@ -34,9 +31,9 @@ export function BottomNavBar({ onVendorPress }: Props) {
     <nav
       className="flex-none flex items-stretch"
       style={{
-        height: 'var(--nav-height)',
+        height:     'var(--nav-height)',
         background: '#111111',
-        borderTop: '1px solid #1A1A1A',
+        borderTop:  '1px solid #1A1A1A',
       }}
     >
       {TABS.map(tab => {
@@ -44,6 +41,7 @@ export function BottomNavBar({ onVendorPress }: Props) {
         const isActive = !isAdd && activeTab === tab.id;
         const Icon     = tab.icon;
 
+        /* ── Centre FAB ── */
         if (isAdd) {
           return (
             <button
@@ -51,7 +49,6 @@ export function BottomNavBar({ onVendorPress }: Props) {
               className="flex-1 flex flex-col items-center justify-center gap-1"
               onClick={() => handlePress('add')}
             >
-              {/* Raised FAB — teal if no vendor, teal-dim with dashboard icon if vendor */}
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center -mt-5 shadow-lg transition-all"
                 style={{
@@ -63,17 +60,20 @@ export function BottomNavBar({ onVendorPress }: Props) {
               >
                 {myVendor
                   ? <LayoutDashboard size={20} color="#00C896" strokeWidth={2} />
-                  : <Plus size={22} color="white" strokeWidth={2.5} />
+                  : <Plus            size={22} color="white"   strokeWidth={2.5} />
                 }
               </div>
-              <span className="text-[9px] font-semibold uppercase tracking-wide"
-                style={{ color: myVendor ? '#00C896' : '#5C5C5C' }}>
+              <span
+                className="text-[9px] font-semibold uppercase tracking-wide"
+                style={{ color: myVendor ? '#00C896' : '#5C5C5C' }}
+              >
                 {myVendor ? 'Dashboard' : '+ Vendor'}
               </span>
             </button>
           );
         }
 
+        /* ── Regular tab ── */
         return (
           <button
             key={tab.id}
@@ -90,8 +90,8 @@ export function BottomNavBar({ onVendorPress }: Props) {
             )}
             {Icon && (
               <Icon
-                size={21}
-                strokeWidth={isActive ? 2.2 : 1.7}
+                size={tab.id === 'community' ? 20 : 21}
+                strokeWidth={isActive ? 2.1 : 1.7}
                 color={isActive ? '#00C896' : '#5C5C5C'}
               />
             )}

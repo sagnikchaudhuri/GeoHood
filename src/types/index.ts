@@ -6,7 +6,7 @@ export type VendorCategory =
   | 'transport' | 'education' | 'emergency' | 'society_services'
   | 'local_shops' | 'professional' | 'other';
 
-export type TabName = 'home' | 'map' | 'search' | 'society' | 'profile';
+export type TabName = 'home' | 'map' | 'search' | 'society' | 'community';
 
 export interface CategoryGroup {
   id:            VendorCategory;
