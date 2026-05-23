@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+/* ─── GeoHood Design Token System ─────────────────────────────────────────── */
+
+:root {
+  /* Brand */
+  --teal:          #00C896;
+  --teal-dim:      rgba(0,200,150,0.12);
+  --teal-border:   rgba(0,200,150,0.28);
+  --maroon:        #8B1A2A;
+  --maroon-dim:    rgba(139,26,42,0.18);
+  --ocean:         #1666E8;
+  --amber:         #F5A623;
+  --amber-dim:     rgba(245,166,35,0.12);
+  --red-live:      #FF4D6A;
+  --red-live-dim:  rgba(255,77,106,0.15);
+
+  /* Background scale — black dominant */
+  --bg-root:       #0D0D0D;
+  --bg-surface:    #111111;
+  --bg-card:       #161616;
+  --bg-input:      #1A1A1A;
+  --bg-elevated:   #202020;
+  --bg-high:       #2A2A2A;
+
+  /* Border scale */
+  --border-faint:  #1A1A1A;
+  --border-subtle: #222222;
+  --border-mid:    #2A2A2A;
+  --border-strong: #3A3A3A;
+
+  /* Text scale */
+  --text-primary:    #EBEBEB;
+  --text-secondary:  #ADADAD;
+  --text-muted:      #5C5C5C;
+  --text-faint:      #303030;
+
+  /* Status */
+  --status-open:        #00C896;
+  --status-open-bg:     rgba(0,200,150,0.10);
+  --status-open-border: rgba(0,200,150,0.25);
+  --status-closed:      #484848;
+  --status-urgent:      #F5A623;
+  --status-live:        #FF4D6A;
+  --verified:           #00C896;
+  --verified-bg:        rgba(0,200,150,0.10);
+  --premium:            #F5A623;
+  --premium-bg:         rgba(245,166,35,0.10);
+
+  /* Spacing (8pt grid tokens) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Nav */
+  --nav-height: 64px;
+  --topbar-height: 56px;
+  --screen-pad-x: 20px;
+}
+
+/* ─── Global reset ─────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ─── Scrollbar styling ─────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 4px; }
+
+/* ─── Leaflet dark map overrides ────────────────────────────────────────────── */
+
+.leaflet-container {
+  background: #0D0D0D !important;
+  font-family: inherit;
+}
+.leaflet-control-attribution {
+  background: rgba(13,13,13,0.7) !important;
+  color: var(--text-muted) !important;
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a { color: var(--text-muted) !important; }
+.leaflet-control-zoom {
+  border: 1px solid var(--border-subtle) !important;
+  overflow: hidden;
+  border-radius: var(--radius-sm) !important;
+}
+.leaflet-control-zoom a {
+  background: var(--bg-surface) !important;
+  color: var(--text-secondary) !important;
+  border: none !important;
+  line-height: 26px !important;
+}
+.leaflet-control-zoom a:hover { background: var(--bg-elevated) !important; }
+.leaflet-bar { box-shadow: none !important; }
+
+/* ─── Pulse animation for live vendors ───────────────────────────────────────── */
+
+@keyframes gh-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 0;   transform: scale(2.2); }
+}
+.gh-pulse { animation: gh-pulse 2s ease-in-out infinite; }
+
+/* ─── Shimmer animation for skeletons ───────────────────────────────────────── */
+
+@keyframes gh-shimmer {
+  0%, 100% { opacity: 0.28; }
+  50%       { opacity: 0.55; }
+}
+.gh-shimmer { animation: gh-shimmer 1.4s ease-in-out infinite; }
+
+/* ─── Mobile-safe touch handling ─────────────────────────────────────────────── */
+
+button, a { -webkit-tap-highlight-color: transparent; outline: none; }
+
+/* ─── Utility: full bleed safe area ─────────────────────────────────────────── */
+
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pt-safe { padding-top:    env(safe-area-inset-top, 0px); }
