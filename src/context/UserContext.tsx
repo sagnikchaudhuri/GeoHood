@@ -26,6 +26,7 @@ const GH_KEYS = [
   'gh_saved_vendors', 'gh_notifications',
   'gh_location',        // single LocationState blob (replaces gh_lat/gh_lng/gh_accuracy)
   'gh_loc_perm',        // 'unknown' | 'granted' | 'denied'
+  'gh_profile_photo',   // base64 DataURL | null
 ];
 
 /* ─── Fallback location (Patuli) ─────────────────────────────────────────── */
@@ -99,6 +100,10 @@ interface UserContextValue {
    */
   requestUserLocation: () => Promise<LocationResult>;
 
+  // Profile photo (V1 — stored as DataURL in localStorage)
+  profilePhoto:    string | null;
+  setProfilePhoto: (dataUrl: string | null) => void;
+
   // Sign out
   signOut: () => void;
 }
@@ -119,6 +124,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [localityManualOverride, setLMO]        = useState(() => load('gh_locality_manual', false));
   const [savedVendorIds, setSavedVendorIds]     = useState<string[]>(() => load('gh_saved_vendors', []));
   const [notificationsEnabled, setNotifications]= useState(() => load('gh_notifications', true));
+
+  // ── Profile photo ──────────────────────────────────────────────────────────
+  const [profilePhoto, setProfilePhotoState] = useState<string | null>(
+    () => {
+      try { return localStorage.getItem('gh_profile_photo') ?? null; } catch { return null; }
+    },
+  );
 
   // ── Single location state blob ─────────────────────────────────────────────
   const [location, setLocationState]       = useState<LocationState | null>(() => load('gh_location', null));
@@ -147,6 +159,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { save('gh_notifications',   notificationsEnabled);   }, [notificationsEnabled]);
   useEffect(() => { save('gh_location',        location);               }, [location]);
   useEffect(() => { save('gh_loc_perm',        locationPermission);     }, [locationPermission]);
+  // Profile photo stored raw (DataURL is a string, no JSON needed — but use localStorage directly)
+  useEffect(() => {
+    try {
+      if (profilePhoto) localStorage.setItem('gh_profile_photo', profilePhoto);
+      else               localStorage.removeItem('gh_profile_photo');
+    } catch {}
+  }, [profilePhoto]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -264,6 +283,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const setProfilePhoto = useCallback((dataUrl: string | null) => {
+    setProfilePhotoState(dataUrl);
+  }, []);
+
   const signOut = useCallback(() => {
     GH_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
     setHasOnboarded(false);
@@ -279,6 +302,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setLocationState(null);
     setLocPerm('unknown');
     setLocStatus('idle');
+    setProfilePhotoState(null);
   }, []);
 
   const myLeads = myVendor
@@ -299,6 +323,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       location, userLat, userLng, userAccuracy,
       locationPermission, locationStatus,
       requestUserLocation,
+      profilePhoto, setProfilePhoto,
       signOut,
     }}>
       {children}

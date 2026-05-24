@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   User, MapPin, Star, Bell, Shield, ChevronRight, LogOut, X, Store,
-  ChevronLeft, Check, Heart, Lock, AlertCircle,
+  ChevronLeft, Check, Heart, Lock, AlertCircle, Camera, ImagePlus, Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUser } from '../context/UserContext';
@@ -516,12 +516,188 @@ function SignOutModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   PHOTO OPTIONS BOTTOM SHEET
+   ═══════════════════════════════════════════════════════════════════════════ */
+function PhotoOptionsSheet({
+  hasPhoto,
+  onCamera,
+  onGallery,
+  onRemove,
+  onCancel,
+}: {
+  hasPhoto:  boolean;
+  onCamera:  () => void;
+  onGallery: () => void;
+  onRemove:  () => void;
+  onCancel:  () => void;
+}) {
+  const options = [
+    {
+      icon:    Camera,
+      label:   'Take Photo',
+      sub:     'Open device camera',
+      color:   '#00C896',
+      bgColor: 'rgba(0,200,150,0.1)',
+      action:  onCamera,
+    },
+    {
+      icon:    ImagePlus,
+      label:   'Choose from Library',
+      sub:     'Pick from photos & albums',
+      color:   '#4D9EFF',
+      bgColor: 'rgba(77,158,255,0.1)',
+      action:  onGallery,
+    },
+    ...(hasPhoto ? [{
+      icon:    Trash2,
+      label:   'Remove Photo',
+      sub:     'Revert to initials avatar',
+      color:   '#FF4D6A',
+      bgColor: 'rgba(255,77,106,0.08)',
+      action:  onRemove,
+    }] : []),
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 30,
+        display: 'flex', alignItems: 'flex-end',
+        background: 'rgba(0,0,0,0.72)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+      }}
+      onClick={onCancel}
+    >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%',
+          background: '#161616',
+          borderRadius: '24px 24px 0 0',
+          padding: '8px 16px',
+          paddingBottom: 'calc(var(--safe-bottom, 0px) + 20px)',
+        }}
+      >
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 16px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 9999, background: '#2A2A2A' }} />
+        </div>
+
+        {/* Title */}
+        <p style={{
+          fontSize: 11, fontWeight: 700, color: '#5C5C5C',
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          margin: '0 0 12px', paddingLeft: 4,
+        }}>
+          Profile Photo
+        </p>
+
+        {/* Option buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+          {options.map(opt => {
+            const Icon = opt.icon;
+            return (
+              <motion.button
+                key={opt.label}
+                whileTap={{ scale: 0.98 }}
+                onClick={opt.action}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 16px', borderRadius: 18,
+                  border: `1px solid ${opt.color}22`,
+                  background: opt.bgColor,
+                  cursor: 'pointer', width: '100%', textAlign: 'left',
+                }}
+              >
+                <div style={{
+                  width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: `${opt.color}18`,
+                }}>
+                  <Icon size={18} color={opt.color} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#EBEBEB', margin: 0 }}>{opt.label}</p>
+                  <p style={{ fontSize: 11, color: '#5C5C5C', margin: '2px 0 0' }}>{opt.sub}</p>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+
+        {/* Cancel */}
+        <button
+          onClick={onCancel}
+          style={{
+            width: '100%', padding: '14px', borderRadius: 16,
+            border: '1px solid #2A2A2A', background: '#1A1A1A',
+            fontSize: 14, fontWeight: 600, color: '#5C5C5C', cursor: 'pointer',
+          }}
+        >
+          Cancel
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    MAIN PROFILE SCREEN
    ═══════════════════════════════════════════════════════════════════════════ */
 export function ProfileScreen({ onClose }: Props) {
-  const { user, myVendor, selectedLocality, savedVendorIds, notificationsEnabled, signOut } = useUser();
-  const [section, setSection]       = useState<Section>('main');
-  const [showSignOut, setShowSignOut] = useState(false);
+  const {
+    user, myVendor, selectedLocality, savedVendorIds,
+    notificationsEnabled, signOut,
+    profilePhoto, setProfilePhoto,
+  } = useUser();
+  const [section, setSection]         = useState<Section>('main');
+  const [showSignOut, setShowSignOut]  = useState(false);
+  const [showPhotoOpts, setShowPhotoOpts] = useState(false);
+
+  // Hidden file inputs
+  const cameraInputRef  = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  /* Read selected file → DataURL → persist */
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        setProfilePhoto(dataUrl);
+        console.log('[GeoHood Profile] Photo saved, size:', Math.round(dataUrl.length / 1024), 'KB');
+      }
+    };
+    reader.readAsDataURL(file);
+    // Reset so same file can be re-picked
+    e.target.value = '';
+    setShowPhotoOpts(false);
+  }, [setProfilePhoto]);
+
+  const handleCamera = useCallback(() => {
+    setShowPhotoOpts(false);
+    // Small delay so sheet closes before native picker opens
+    setTimeout(() => cameraInputRef.current?.click(), 120);
+  }, []);
+
+  const handleGallery = useCallback(() => {
+    setShowPhotoOpts(false);
+    setTimeout(() => galleryInputRef.current?.click(), 120);
+  }, []);
+
+  const handleRemovePhoto = useCallback(() => {
+    setProfilePhoto(null);
+    setShowPhotoOpts(false);
+  }, [setProfilePhoto]);
 
   const localityName = LOCALITIES.find(l => l.id === selectedLocality)?.name ?? 'Patuli';
 
@@ -596,19 +772,70 @@ export function ProfileScreen({ onClose }: Props) {
       {/* ── Scrollable body ── */}
       <div className="scrollbar-none" style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
 
+        {/* ── Hidden file inputs (camera + gallery) ── */}
+        {/* capture="user" requests front camera on mobile; browser falls back gracefully on desktop */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+
         {/* Avatar + name */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 20px 20px' }}>
-          <div style={{
-            width: 80, height: 80, borderRadius: '50%', marginBottom: 14,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: initials ? 'rgba(0,200,150,0.1)' : '#161616',
-            border: `2px solid ${initials ? 'rgba(0,200,150,0.25)' : '#2A2A2A'}`,
-          }}>
-            {initials
-              ? <span style={{ fontSize: 26, fontWeight: 800, color: '#00C896' }}>{initials}</span>
-              : <User size={32} color="#3A3A3A" />
-            }
-          </div>
+          {/* Tappable avatar ring */}
+          <button
+            onClick={() => setShowPhotoOpts(true)}
+            style={{
+              position: 'relative', width: 88, height: 88,
+              borderRadius: '50%', marginBottom: 14,
+              padding: 0, border: 'none', cursor: 'pointer', background: 'transparent',
+              flexShrink: 0,
+            }}
+            aria-label="Edit profile photo"
+          >
+            {/* Avatar face */}
+            <div style={{
+              width: 88, height: 88, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
+              background: profilePhoto ? 'transparent' : (initials ? 'rgba(0,200,150,0.1)' : '#161616'),
+              border: `2.5px solid ${profilePhoto ? '#00C896' : (initials ? 'rgba(0,200,150,0.3)' : '#2A2A2A')}`,
+              boxSizing: 'border-box',
+            }}>
+              {profilePhoto ? (
+                <img
+                  src={profilePhoto}
+                  alt="Profile"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : initials ? (
+                <span style={{ fontSize: 28, fontWeight: 800, color: '#00C896' }}>{initials}</span>
+              ) : (
+                <User size={32} color="#3A3A3A" />
+              )}
+            </div>
+
+            {/* Camera badge (bottom-right) */}
+            <div style={{
+              position: 'absolute', bottom: 2, right: 2,
+              width: 26, height: 26, borderRadius: '50%',
+              background: '#00C896',
+              border: '2px solid #0D0D0D',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Camera size={13} color="#0D0D0D" />
+            </div>
+          </button>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#EBEBEB', margin: 0, letterSpacing: '-0.02em' }}>
             {user?.name ?? 'GeoHood User'}
           </h2>
@@ -726,6 +953,19 @@ export function ProfileScreen({ onClose }: Props) {
         {section === 'saved'         && <SavedVendors        onBack={() => setSection('main')} />}
         {section === 'notifications' && <NotificationsPage   onBack={() => setSection('main')} />}
         {section === 'privacy'       && <PrivacySafetyPage   onBack={() => setSection('main')} />}
+      </AnimatePresence>
+
+      {/* ── Photo options sheet ── */}
+      <AnimatePresence>
+        {showPhotoOpts && (
+          <PhotoOptionsSheet
+            hasPhoto={!!profilePhoto}
+            onCamera={handleCamera}
+            onGallery={handleGallery}
+            onRemove={handleRemovePhoto}
+            onCancel={() => setShowPhotoOpts(false)}
+          />
+        )}
       </AnimatePresence>
 
       {/* ── Sign-out confirm ── */}
