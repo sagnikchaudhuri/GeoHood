@@ -236,7 +236,7 @@ export function OnboardingScreen() {
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
         >
           <img
-            src="/geohood-logo.png"
+            src="/geohood-full-logo.png"
             alt="GeoHood"
             draggable={false}
             style={{ height: 96, width: 'auto', objectFit: 'contain', display: 'block' }}
@@ -277,7 +277,7 @@ export function OnboardingScreen() {
           gap: 8, paddingTop: 'calc(var(--safe-top, 0px) + 40px)', paddingBottom: 20, paddingLeft: 24, paddingRight: 24,
         }}>
           <img
-            src="/geohood-logo.png"
+            src="/geohood-full-logo.png"
             alt="GeoHood"
             draggable={false}
             style={{ height: 56, width: 'auto', objectFit: 'contain', display: 'block' }}
@@ -307,7 +307,7 @@ export function OnboardingScreen() {
               {/* Official logo */}
               <div style={{ marginBottom: 28 }}>
                 <img
-                  src="/geohood-logo.png"
+                  src="/geohood-full-logo.png"
                   alt="GeoHood"
                   draggable={false}
                   style={{

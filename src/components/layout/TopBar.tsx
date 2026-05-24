@@ -37,19 +37,32 @@ export function TopBar({ scrolled = false }: TopBarProps) {
         <Menu size={20} color="#ADADAD" strokeWidth={1.8} />
       </button>
 
-      {/* Official GeoHood logo (PNG — shield mark + wordmark) */}
-      <div className="flex items-center flex-none">
+      {/* Shield icon + typed wordmark */}
+      <div className="flex items-center gap-2 flex-none">
         <img
-          src="/geohood-logo.png"
-          alt="GeoHood"
+          src="/geohood-icon.png"
+          alt=""
+          aria-hidden="true"
           draggable={false}
           style={{
-            height:    40,
+            height:    30,
             width:     'auto',
             objectFit: 'contain',
             display:   'block',
+            flexShrink: 0,
           }}
         />
+        <span
+          style={{
+            fontSize:      16,
+            fontWeight:    700,
+            color:         '#EBEBEB',
+            letterSpacing: '-0.02em',
+            lineHeight:    1,
+          }}
+        >
+          GeoHood
+        </span>
       </div>
 
       {/* Spacer */}
