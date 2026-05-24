@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, MapPin, ArrowRight, RefreshCw, ChevronLeft, User } from 'lucide-react';
-import { GeoHoodLogoMark } from '../components/brand/GeoHoodLogo';
 import { useUser } from '../context/UserContext';
 import { LOCALITIES, DEFAULT_LOCALITY } from '../data/localities';
 import { UserProfile } from '../types';
@@ -236,7 +235,12 @@ export function OnboardingScreen() {
           transition={{ duration: 0.5 }}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
         >
-          <GeoHoodLogoMark size={64} />
+          <img
+            src="/geohood-logo.png"
+            alt="GeoHood"
+            draggable={false}
+            style={{ height: 96, width: 'auto', objectFit: 'contain', display: 'block' }}
+          />
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ fontSize: 24, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 8px' }}>
               Welcome, {pendingProfile?.name ?? userName}
@@ -272,11 +276,12 @@ export function OnboardingScreen() {
           flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
           gap: 8, paddingTop: 'calc(var(--safe-top, 0px) + 40px)', paddingBottom: 20, paddingLeft: 24, paddingRight: 24,
         }}>
-          <GeoHoodLogoMark size={40} />
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#EBEBEB', letterSpacing: '-0.01em', margin: 0 }}>GeoHood</p>
-            <p style={{ fontSize: 9, color: '#3A3A3A', letterSpacing: '0.14em', textTransform: 'uppercase', margin: '2px 0 0' }}>Hyperlocal</p>
-          </div>
+          <img
+            src="/geohood-logo.png"
+            alt="GeoHood"
+            draggable={false}
+            style={{ height: 56, width: 'auto', objectFit: 'contain', display: 'block' }}
+          />
         </div>
       )}
 
@@ -299,18 +304,20 @@ export function OnboardingScreen() {
               transition={{ duration: 0.28 }}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, textAlign: 'center', width: '100%' }}
             >
-              {/* Logo */}
-              <div style={{ marginBottom: 32 }}>
-                <GeoHoodLogoMark size={72} />
+              {/* Official logo */}
+              <div style={{ marginBottom: 28 }}>
+                <img
+                  src="/geohood-logo.png"
+                  alt="GeoHood"
+                  draggable={false}
+                  style={{
+                    height:    180,
+                    width:     'auto',
+                    objectFit: 'contain',
+                    display:   'block',
+                  }}
+                />
               </div>
-
-              {/* Wordmark */}
-              <h1 style={{ fontSize: 32, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.03em', margin: '0 0 4px', lineHeight: 1 }}>
-                GeoHood
-              </h1>
-              <p style={{ fontSize: 10, color: '#3A3A3A', letterSpacing: '0.2em', textTransform: 'uppercase', margin: '0 0 24px', fontWeight: 600 }}>
-                Hyperlocal
-              </p>
 
               {/* Hero tagline */}
               <p style={{ fontSize: 17, fontWeight: 700, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 10px', lineHeight: 1.4 }}>

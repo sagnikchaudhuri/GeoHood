@@ -1,6 +1,5 @@
 import React from 'react';
 import { Bell, ChevronDown, Menu } from 'lucide-react';
-import { GeoHoodLogoMark } from '../brand/GeoHoodLogo';
 import { useAppContext } from '../../context/AppContext';
 import { useUser } from '../../context/UserContext';
 import { LOCALITIES } from '../../data/localities';
@@ -38,15 +37,19 @@ export function TopBar({ scrolled = false }: TopBarProps) {
         <Menu size={20} color="#ADADAD" strokeWidth={1.8} />
       </button>
 
-      {/* Logo mark + wordmark */}
-      <div className="flex items-center gap-2 flex-none">
-        <GeoHoodLogoMark size={26} />
-        <span
-          className="font-bold text-[#EBEBEB]"
-          style={{ fontSize: 16, letterSpacing: '-0.02em' }}
-        >
-          GeoHood
-        </span>
+      {/* Official GeoHood logo (PNG — shield mark + wordmark) */}
+      <div className="flex items-center flex-none">
+        <img
+          src="/geohood-logo.png"
+          alt="GeoHood"
+          draggable={false}
+          style={{
+            height:    40,
+            width:     'auto',
+            objectFit: 'contain',
+            display:   'block',
+          }}
+        />
       </div>
 
       {/* Spacer */}
