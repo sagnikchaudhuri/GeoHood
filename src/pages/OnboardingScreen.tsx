@@ -112,8 +112,10 @@ export function OnboardingScreen() {
   const [otpError,   setOtpError] = useState(false);
   const [shake,      setShake]    = useState(false);
   const [locality,   setLocality] = useState(DEFAULT_LOCALITY.id);
-  const [detecting,  setDetecting]= useState(false);
-  const [userName,   setUserName] = useState('');
+  const [detecting,   setDetecting]   = useState(false);
+  const [locDenied,   setLocDenied]   = useState(false);
+  const [locDetected, setLocDetected] = useState(false);
+  const [userName,    setUserName]    = useState('');
   const [resendSec,  setResendSec]= useState(0);
   const [pendingProfile, setPendingProfile] = useState<UserProfile | null>(null);
 
@@ -179,9 +181,20 @@ export function OnboardingScreen() {
     }
   };
 
-  const detectLocation = () => {
+  const { requestUserLocation } = useUser();
+
+  const detectLocation = async () => {
     setDetecting(true);
-    setTimeout(() => { setLocality('patuli'); setDetecting(false); }, 1200);
+    setLocDenied(false);
+    setLocDetected(false);
+    const result = await requestUserLocation();
+    setDetecting(false);
+    if (result.status === 'granted') {
+      setLocality(result.localityId);
+      setLocDetected(true);
+    } else {
+      setLocDenied(true);
+    }
   };
 
   const goToName = () => setStep('name');
@@ -560,11 +573,15 @@ export function OnboardingScreen() {
               {/* Use my location */}
               <button
                 onClick={detectLocation}
+                disabled={detecting}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  padding: '14px', borderRadius: 16, marginBottom: 16,
-                  border: '1px solid rgba(0,200,150,0.25)', background: 'rgba(0,200,150,0.06)',
-                  fontSize: 13, fontWeight: 600, color: '#00C896', cursor: 'pointer',
+                  padding: '14px', borderRadius: 16, marginBottom: locDenied ? 8 : 16,
+                  border: `1px solid ${locDenied ? 'rgba(255,77,106,0.25)' : locDetected ? 'rgba(0,200,150,0.35)' : 'rgba(0,200,150,0.25)'}`,
+                  background: locDenied ? 'rgba(255,77,106,0.06)' : locDetected ? 'rgba(0,200,150,0.08)' : 'rgba(0,200,150,0.06)',
+                  fontSize: 13, fontWeight: 600,
+                  color: locDenied ? '#FF4D6A' : '#00C896',
+                  cursor: detecting ? 'wait' : 'pointer',
                 }}
               >
                 {detecting ? (
@@ -574,12 +591,17 @@ export function OnboardingScreen() {
                     </motion.div>
                     Detecting location…
                   </>
+                ) : locDetected ? (
+                  <><MapPin size={15} /> Location detected ✓</>
                 ) : (
-                  <>
-                    <MapPin size={15} /> Use my location
-                  </>
+                  <><MapPin size={15} /> Use my location</>
                 )}
               </button>
+              {locDenied && (
+                <p style={{ fontSize: 11, color: '#FF4D6A', textAlign: 'center', marginBottom: 12 }}>
+                  Permission denied — please choose manually below.
+                </p>
+              )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1, height: 1, background: '#1E1E1E' }} />

@@ -3,6 +3,7 @@ import {
   UserProfile, RegisteredVendor, Lead, ResidenceRegistration,
   VendorCategory,
 } from '../types';
+import { requestGeolocation, LocationResult } from '../utils/locationService';
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ const GH_KEYS = [
   'gh_onboarded','gh_user','gh_vendor','gh_leads',
   'gh_residence','gh_seen_soc','gh_locality',
   'gh_saved_vendors','gh_notifications',
+  'gh_lat','gh_lng','gh_loc_perm',
 ];
 
 // ─── Context shape ────────────────────────────────────────────────────────────
@@ -63,6 +65,12 @@ interface UserContextValue {
   notificationsEnabled:   boolean;
   toggleNotifications:    () => void;
 
+  // GPS Location
+  userLat:             number | null;
+  userLng:             number | null;
+  locationPermission:  'unknown' | 'granted' | 'denied';
+  requestUserLocation: () => Promise<LocationResult>;
+
   // Sign out
   signOut: () => void;
 }
@@ -81,6 +89,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [selectedLocality, setLocalityState]    = useState(() => load('gh_locality', 'patuli'));
   const [savedVendorIds, setSavedVendorIds]     = useState<string[]>(() => load('gh_saved_vendors', []));
   const [notificationsEnabled, setNotifications]= useState(() => load('gh_notifications', true));
+  const [userLat,  setUserLatState]             = useState<number | null>(() => load('gh_lat',      null));
+  const [userLng,  setUserLngState]             = useState<number | null>(() => load('gh_lng',      null));
+  const [locationPermission, setLocPermission]  = useState<'unknown' | 'granted' | 'denied'>(() => load('gh_loc_perm', 'unknown'));
 
   // Persist
   useEffect(() => { save('gh_onboarded', hasOnboarded); }, [hasOnboarded]);
@@ -92,6 +103,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { save('gh_locality', selectedLocality); }, [selectedLocality]);
   useEffect(() => { save('gh_saved_vendors', savedVendorIds); }, [savedVendorIds]);
   useEffect(() => { save('gh_notifications', notificationsEnabled); }, [notificationsEnabled]);
+  useEffect(() => { save('gh_lat',      userLat);           }, [userLat]);
+  useEffect(() => { save('gh_lng',      userLng);           }, [userLng]);
+  useEffect(() => { save('gh_loc_perm', locationPermission);}, [locationPermission]);
 
   const completeOnboarding = useCallback((profile: UserProfile) => {
     setUserState(profile);
@@ -152,6 +166,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setNotifications(prev => !prev);
   }, []);
 
+  const requestUserLocation = useCallback(async (): Promise<LocationResult> => {
+    const result = await requestGeolocation();
+    if (result.status === 'granted') {
+      setUserLatState(result.lat);
+      setUserLngState(result.lng);
+      setLocPermission('granted');
+      setLocalityState(result.localityId);
+    } else {
+      setLocPermission('denied');
+    }
+    return result;
+  }, []);
+
   const signOut = useCallback(() => {
     // Clear all persisted state
     GH_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
@@ -165,6 +192,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setLocalityState('patuli');
     setSavedVendorIds([]);
     setNotifications(true);
+    setUserLatState(null);
+    setUserLngState(null);
+    setLocPermission('unknown');
   }, []);
 
   const myLeads = myVendor
@@ -182,6 +212,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       selectedLocality, setSelectedLocality,
       savedVendorIds, toggleSavedVendor, isVendorSaved,
       notificationsEnabled, toggleNotifications,
+      userLat, userLng, locationPermission, requestUserLocation,
       signOut,
     }}>
       {children}

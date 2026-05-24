@@ -47,7 +47,17 @@ function SubHeader({ title, onBack }: { title: string; onBack: () => void }) {
    LOCALITY SELECTOR
    ═══════════════════════════════════════════════════════════════════════════ */
 function LocalitySelector({ onBack }: { onBack: () => void }) {
-  const { selectedLocality, setSelectedLocality } = useUser();
+  const { selectedLocality, setSelectedLocality, requestUserLocation } = useUser();
+  const [detecting,  setDetecting]  = useState(false);
+  const [locStatus,  setLocStatus]  = useState<'idle' | 'denied' | 'success'>('idle');
+
+  const handleDetect = async () => {
+    setDetecting(true);
+    setLocStatus('idle');
+    const result = await requestUserLocation();
+    setDetecting(false);
+    setLocStatus(result.status === 'granted' ? 'success' : 'denied');
+  };
 
   return (
     <motion.div
@@ -60,9 +70,44 @@ function LocalitySelector({ onBack }: { onBack: () => void }) {
     >
       <SubHeader title="My Locality" onBack={onBack} />
       <div className="scrollbar-none" style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 32px' }}>
-        <p style={{ fontSize: 12, color: '#5C5C5C', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 12, color: '#5C5C5C', margin: '0 0 12px' }}>
           Select your home locality — this updates your neighbourhood feed and vendor list.
         </p>
+
+        {/* Use my location button */}
+        <button
+          onClick={handleDetect}
+          disabled={detecting}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '13px', borderRadius: 14, marginBottom: 8,
+            border: `1px solid ${locStatus === 'denied' ? 'rgba(255,77,106,0.25)' : locStatus === 'success' ? 'rgba(0,200,150,0.35)' : 'rgba(0,200,150,0.22)'}`,
+            background: locStatus === 'denied' ? 'rgba(255,77,106,0.06)' : 'rgba(0,200,150,0.05)',
+            fontSize: 13, fontWeight: 600,
+            color: locStatus === 'denied' ? '#FF4D6A' : '#00C896',
+            cursor: detecting ? 'wait' : 'pointer',
+          }}
+        >
+          {detecting ? (
+            <>
+              <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(0,200,150,0.3)', borderTopColor: '#00C896', animation: 'spin 0.7s linear infinite' }} />
+              Detecting…
+            </>
+          ) : locStatus === 'success' ? (
+            <><MapPin size={14} /> Location detected ✓</>
+          ) : locStatus === 'denied' ? (
+            <><MapPin size={14} /> Permission denied — choose below</>
+          ) : (
+            <><MapPin size={14} /> Use my current location</>
+          )}
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1, height: 1, background: '#1A1A1A' }} />
+          <span style={{ fontSize: 10, color: '#3A3A3A', fontWeight: 600 }}>or choose</span>
+          <div style={{ flex: 1, height: 1, background: '#1A1A1A' }} />
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {LOCALITIES.map(loc => {
             const active = loc.id === selectedLocality;

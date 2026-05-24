@@ -1,17 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
+import { MapContainer, TileLayer, Marker, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Navigation2, Phone, MessageCircle } from 'lucide-react';
+import { X, Navigation2, Phone, MessageCircle, MapPin } from 'lucide-react';
 import { Vendor } from '../types';
 import { CATEGORIES, PIN_COLORS, CATEGORY_MAP } from '../constants';
 import { MOCK_VENDORS, getVendorsByCategory } from '../data/mockVendors';
 import { getOpenStatus, formatDistance } from '../utils/timeUtils';
 import { useAppContext } from '../context/AppContext';
+import { useUser } from '../context/UserContext';
+import { PATULI_FALLBACK_LAT, PATULI_FALLBACK_LNG } from '../utils/locationService';
 
-const CENTER: [number, number] = [22.4729, 88.3997];
-
-/* ── SVG pin icon ─────────────────────────────────────────────────────── */
+/* ── SVG pin icon ─────────────────────────────────────────────────────────── */
 function makePinSvg(color: string, isLive: boolean) {
   const pulse = isLive
     ? `<circle cx="16" cy="15" r="13" fill="${color}" fill-opacity="0.18"/>`
@@ -34,14 +34,13 @@ function pinIcon(color: string, isLive = false) {
   });
 }
 
-/* ── MapResizer — robust invalidation strategy ─────────────────────────── */
+/* ── MapResizer — robust invalidation ────────────────────────────────────── */
 function MapResizer() {
   const map = useMap();
   useEffect(() => {
     const fix = () => map.invalidateSize({ animate: false, pan: false });
-    // Staggered calls cover animation-frame timing windows
-    const timers = [0, 80, 200, 450].map(ms => setTimeout(fix, ms));
-    // ResizeObserver catches any dynamic container changes
+    // Staggered calls to catch all timing windows
+    const timers = [0, 80, 200, 450, 900].map(ms => setTimeout(fix, ms));
     const ro = new ResizeObserver(fix);
     ro.observe(map.getContainer());
     return () => { timers.forEach(clearTimeout); ro.disconnect(); };
@@ -49,7 +48,28 @@ function MapResizer() {
   return null;
 }
 
-/* ── Category filter data ──────────────────────────────────────────────── */
+/* ── MapController — pan/zoom imperatively ───────────────────────────────── */
+function MapController({
+  center,
+  recenterSignal,
+}: {
+  center: [number, number];
+  recenterSignal: number;
+}) {
+  const map = useMap();
+  const prevSignalRef = useRef(0);
+
+  useEffect(() => {
+    if (recenterSignal > 0 && recenterSignal !== prevSignalRef.current) {
+      prevSignalRef.current = recenterSignal;
+      map.setView(center, 15, { animate: true });
+    }
+  }, [recenterSignal, center, map]);
+
+  return null;
+}
+
+/* ── Category filter data ─────────────────────────────────────────────────── */
 const ALL_CATS = [
   { id: 'all', label: 'All', icon: '🏘️', color: '#00C896', bgColor: 'rgba(0,200,150,0.12)' },
   ...CATEGORIES,
@@ -59,35 +79,50 @@ const ALL_CATS = [
    MapScreen
    ═══════════════════════════════════════════════════════════════════════════ */
 export function MapScreen() {
-  const { setSelectedVendor } = useAppContext();
-  const [activeCat, setActiveCat]         = useState('all');
-  const [previewVendor, setPreviewVendor] = useState<Vendor | null>(null);
+  const { setSelectedVendor }                       = useAppContext();
+  const { userLat, userLng, locationPermission,
+          requestUserLocation, selectedLocality }   = useUser();
+
+  const [activeCat,      setActiveCat]      = useState('all');
+  const [previewVendor,  setPreviewVendor]  = useState<Vendor | null>(null);
+  const [recenterSignal, setRecenterSignal] = useState(0);
+  const [locLoading,     setLocLoading]     = useState(false);
 
   const vendors = getVendorsByCategory(activeCat);
 
-  /* ── Measure the map wrapper to give Leaflet exact pixel dimensions ── */
-  const wrapperRef                          = useRef<HTMLDivElement>(null);
-  const [mapDims, setMapDims]               = useState<{ w: number; h: number } | null>(null);
+  const hasLocation = userLat != null && userLng != null;
+  const mapCenter: [number, number] = hasLocation
+    ? [userLat as number, userLng as number]
+    : [PATULI_FALLBACK_LAT, PATULI_FALLBACK_LNG];
 
-  useEffect(() => {
+  /* ── Map wrapper — measured for Leaflet key ── */
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [mapKey, setMapKey] = useState('gh-map-init');
+
+  useLayoutEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
-
-    const measure = () => {
-      // Use offsetWidth/Height as a reliable alternative to getBoundingClientRect
+    const update = () => {
       const w = el.offsetWidth;
       const h = el.offsetHeight;
-      if (w > 0 && h > 0) setMapDims({ w, h });
+      if (w > 0 && h > 0) setMapKey(`gh-map-${w}x${h}`);
     };
-
-    // Try immediate, then after rAF (layout settled), then via ResizeObserver
-    measure();
-    const id = requestAnimationFrame(measure);
-    const ro = new ResizeObserver(measure);
+    update();
+    const timers = [0, 100, 300].map(ms => setTimeout(update, ms));
+    const ro = new ResizeObserver(update);
     ro.observe(el);
-
-    return () => { cancelAnimationFrame(id); ro.disconnect(); };
+    return () => { timers.forEach(clearTimeout); ro.disconnect(); };
   }, []);
+
+  const handleRequestLocation = async () => {
+    setLocLoading(true);
+    const result = await requestUserLocation();
+    setLocLoading(false);
+    if (result.status === 'granted') {
+      // Trigger recenter after location updates
+      setTimeout(() => setRecenterSignal(s => s + 1), 100);
+    }
+  };
 
   return (
     <div
@@ -100,7 +135,7 @@ export function MapScreen() {
         overflow:      'hidden',
       }}
     >
-      {/* ── Category filter — sits above map as a real bar ── */}
+      {/* ── Category filter bar ── */}
       <div
         style={{
           flexShrink:    0,
@@ -108,17 +143,12 @@ export function MapScreen() {
           borderBottom:  '1px solid #1A1A1A',
           paddingTop:    'calc(var(--safe-top) + 10px)',
           paddingBottom: 10,
+          zIndex:        10,
         }}
       >
         <div
           className="scrollbar-none"
-          style={{
-            display:    'flex',
-            gap:        8,
-            paddingLeft: 14,
-            paddingRight: 14,
-            overflowX:  'auto',
-          }}
+          style={{ display: 'flex', gap: 8, paddingLeft: 14, paddingRight: 14, overflowX: 'auto' }}
         >
           {ALL_CATS.map(cat => {
             const active = activeCat === cat.id;
@@ -127,20 +157,13 @@ export function MapScreen() {
                 key={cat.id}
                 onClick={() => setActiveCat(cat.id)}
                 style={{
-                  flexShrink:  0,
-                  display:     'flex',
-                  alignItems:  'center',
-                  gap:         5,
-                  padding:     '5px 12px',
-                  borderRadius: 9999,
-                  border:      `1px solid ${active ? cat.color + '50' : '#222'}`,
-                  background:  active ? cat.bgColor : '#181818',
-                  color:       active ? cat.color : '#888',
-                  fontSize:    12,
-                  fontWeight:  500,
-                  whiteSpace:  'nowrap',
-                  cursor:      'pointer',
-                  transition:  'all 0.15s',
+                  flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 12px', borderRadius: 9999,
+                  border:     `1px solid ${active ? cat.color + '50' : '#222'}`,
+                  background: active ? cat.bgColor : '#181818',
+                  color:      active ? cat.color : '#888',
+                  fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
+                  cursor: 'pointer', transition: 'all 0.15s',
                 }}
               >
                 <span style={{ fontSize: 13 }}>{cat.icon}</span>
@@ -151,7 +174,7 @@ export function MapScreen() {
         </div>
       </div>
 
-      {/* ── Map wrapper — measured ref gives Leaflet exact pixel dimensions ── */}
+      {/* ── Map area — flex:1, fills remaining space ── */}
       <div
         ref={wrapperRef}
         style={{
@@ -161,89 +184,144 @@ export function MapScreen() {
           overflow: 'hidden',
         }}
       >
-        {mapDims ? (
-          /* Key encodes dimensions so a resize triggers a fresh mount */
-          <MapContainer
-            key={`gh-map-${mapDims.w}x${mapDims.h}`}
-            center={CENTER}
-            zoom={14}
-            zoomControl={false}
-            style={{
-              width:    mapDims.w,
-              height:   mapDims.h,
-              position: 'absolute',
-              top:      0,
-              left:     0,
-            }}
-          >
-            <MapResizer />
-            <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              attribution=""
-              subdomains="abcd"
-              maxZoom={20}
+        {/* MapContainer fills the wrapper using CSS 100%×100%.
+            We do NOT set position:absolute on .leaflet-container —
+            Leaflet requires position:relative for internal pane layout. */}
+        <MapContainer
+          key={mapKey}
+          center={mapCenter}
+          zoom={14}
+          zoomControl={false}
+          style={{
+            width:  '100%',
+            height: '100%',
+          }}
+        >
+          <MapResizer />
+          <MapController center={mapCenter} recenterSignal={recenterSignal} />
+
+          <TileLayer
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution=""
+            subdomains="abcd"
+            maxZoom={20}
+          />
+
+          {/* Vendor pins */}
+          {vendors.map(v => (
+            <Marker
+              key={v.id}
+              position={[v.lat, v.lng]}
+              icon={pinIcon(PIN_COLORS[v.category] ?? '#888', v.isLive)}
+              eventHandlers={{ click: () => setPreviewVendor(v) }}
             />
-            {vendors.map(v => (
-              <Marker
-                key={v.id}
-                position={[v.lat, v.lng]}
-                icon={pinIcon(PIN_COLORS[v.category] ?? '#888', v.isLive)}
-                eventHandlers={{ click: () => setPreviewVendor(v) }}
+          ))}
+
+          {/* User location marker — pulsing blue circle */}
+          {hasLocation && (
+            <>
+              <CircleMarker
+                center={mapCenter}
+                radius={22}
+                pathOptions={{
+                  fillColor:   '#4D9EFF',
+                  fillOpacity: 0.12,
+                  color:       '#4D9EFF',
+                  weight:      1,
+                  opacity:     0.4,
+                }}
               />
-            ))}
-          </MapContainer>
-        ) : (
-          <div
-            style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: '#0C0C0C',
-            }}
-          >
-            <div
-              style={{
-                width: 24, height: 24,
-                border: '2px solid #1E1E1E',
-                borderTopColor: '#00C896',
-                borderRadius: '50%',
-                animation: 'spin 0.8s linear infinite',
-              }}
-            />
-          </div>
-        )}
+              <CircleMarker
+                center={mapCenter}
+                radius={7}
+                pathOptions={{
+                  fillColor:   '#4D9EFF',
+                  fillOpacity: 0.9,
+                  color:       'white',
+                  weight:      2,
+                  opacity:     1,
+                }}
+              />
+            </>
+          )}
+        </MapContainer>
 
-        {/* Vendor count — top-right, low z-index (map controls level) */}
-        {mapDims && (
-          <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 10 }}>
+        {/* ── Floating controls (z-10 — above tiles, below popup) ── */}
+
+        {/* Vendor count badge */}
+        <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 10 }}>
+          <div style={{
+            padding: '4px 10px', borderRadius: 9999,
+            fontSize: 11, fontWeight: 500,
+            color: '#ABABAB', border: '1px solid #242424',
+            background: 'rgba(16,16,16,0.92)',
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+          }}>
+            {vendors.length} vendors
+          </div>
+        </div>
+
+        {/* Location status badge — shows which locality is active */}
+        <div style={{ position: 'absolute', top: 10, left: 12, zIndex: 10 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '4px 10px', borderRadius: 9999,
+            fontSize: 11, fontWeight: 500,
+            color: hasLocation ? '#4D9EFF' : '#5C5C5C',
+            border: `1px solid ${hasLocation ? 'rgba(77,158,255,0.3)' : '#242424'}`,
+            background: 'rgba(16,16,16,0.92)',
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+          }}>
+            <MapPin size={10} />
+            {hasLocation ? 'Live location' : (selectedLocality ? selectedLocality.charAt(0).toUpperCase() + selectedLocality.slice(1) : 'Patuli')}
+          </div>
+        </div>
+
+        {/* Request location / Recenter button */}
+        <button
+          onClick={locationPermission === 'unknown' ? handleRequestLocation : () => setRecenterSignal(s => s + 1)}
+          disabled={locLoading}
+          style={{
+            position: 'absolute', bottom: 14, right: 12, zIndex: 10,
+            width: 40, height: 40, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: hasLocation ? 'rgba(77,158,255,0.15)' : 'rgba(20,20,20,0.95)',
+            border: `1px solid ${hasLocation ? 'rgba(77,158,255,0.35)' : '#242424'}`,
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            cursor: locLoading ? 'wait' : 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          {locLoading ? (
             <div style={{
-              padding: '4px 10px', borderRadius: 9999,
-              fontSize: 11, fontWeight: 500,
-              color: '#ABABAB', border: '1px solid #242424',
-              background: 'rgba(16,16,16,0.92)',
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-            }}>
-              {vendors.length} vendors
-            </div>
+              width: 16, height: 16, borderRadius: '50%',
+              border: '2px solid #2A2A2A', borderTopColor: '#4D9EFF',
+              animation: 'spin 0.7s linear infinite',
+            }} />
+          ) : (
+            <Navigation2
+              size={17}
+              color={hasLocation ? '#4D9EFF' : '#ADADAD'}
+              fill={hasLocation ? 'rgba(77,158,255,0.25)' : 'none'}
+            />
+          )}
+        </button>
+
+        {/* Location denied hint — bottom left */}
+        {locationPermission === 'denied' && (
+          <div style={{
+            position: 'absolute', bottom: 14, left: 12, zIndex: 10,
+            padding: '6px 12px', borderRadius: 10,
+            fontSize: 10, fontWeight: 500, color: '#5C5C5C',
+            background: 'rgba(16,16,16,0.92)',
+            border: '1px solid #222',
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+          }}>
+            Using {selectedLocality || 'Patuli'} as default
           </div>
         )}
 
-        {/* Recenter button */}
-        {mapDims && (
-          <button
-            style={{
-              position: 'absolute', bottom: 14, right: 12, zIndex: 10,
-              width: 38, height: 38, borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(20,20,20,0.95)', border: '1px solid #242424',
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-              cursor: 'pointer',
-            }}
-          >
-            <Navigation2 size={16} color="#ADADAD" />
-          </button>
-        )}
-
-        {/* Map vendor preview popup — z-20 (above controls, below modals) */}
+        {/* Vendor preview popup — z-20 */}
         <AnimatePresence>
           {previewVendor && (
             <MapPreviewPopup
@@ -255,16 +333,20 @@ export function MapScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ── Nearby vendors strip ── */}
+      {/* ── Nearby vendors strip — capped height to protect map space ── */}
       <div
         style={{
-          flexShrink:   0,
-          background:   '#0D0D0D',
-          borderTop:    '1px solid #1A1A1A',
+          flexShrink: 0,
+          background: '#0D0D0D',
+          borderTop:  '1px solid #1A1A1A',
+          maxHeight:  170,
         }}
       >
-        <div style={{ padding: '10px 16px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#EBEBEB', letterSpacing: '-0.01em' }}>
+        <div style={{
+          padding: '8px 16px 4px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: '#EBEBEB', letterSpacing: '-0.01em', margin: 0 }}>
             Nearby Vendors
           </p>
           <span style={{ fontSize: 10, fontWeight: 600, color: '#3A3A3A' }}>{vendors.length} shown</span>
@@ -274,7 +356,7 @@ export function MapScreen() {
           style={{
             display: 'flex', gap: 8,
             paddingLeft: 16, paddingRight: 16,
-            overflowX: 'auto', paddingBottom: 12,
+            overflowX: 'auto', paddingBottom: 10,
           }}
         >
           {vendors.map(v => {
@@ -287,18 +369,17 @@ export function MapScreen() {
                 key={v.id}
                 onClick={() => setPreviewVendor(isPrev ? null : v)}
                 style={{
-                  flexShrink: 0, width: 140,
+                  flexShrink: 0, width: 136,
                   display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                  padding: '10px 12px 12px', borderRadius: 16, textAlign: 'left',
+                  padding: '9px 11px 10px', borderRadius: 14, textAlign: 'left',
                   background: isPrev ? (cat?.bgColor ?? 'rgba(136,136,136,0.1)') : '#161616',
                   border: `1px solid ${isPrev ? (cat?.color ?? '#888') + '40' : '#1A1A1A'}`,
                   transition: 'all 0.15s',
                 }}
               >
-                {/* Icon + subcategory */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, width: '100%' }}>
                   <div style={{
-                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                    width: 26, height: 26, borderRadius: 7, flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: `${cat?.color ?? '#888'}1a`,
                     fontSize: 9, fontWeight: 700, color: cat?.color ?? '#ADADAD',
@@ -309,14 +390,14 @@ export function MapScreen() {
                     {v.subcategory}
                   </span>
                 </div>
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#EBEBEB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', margin: 0 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#EBEBEB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', margin: 0 }}>
                   {v.name}
                 </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                   <span style={{ fontSize: 9, color: '#5C5C5C' }}>{formatDistance(v.distance)}</span>
                   <span style={{ color: '#252525', fontSize: 9 }}>·</span>
                   <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999,
+                    fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 9999,
                     background: status.isOpen ? 'rgba(0,200,150,0.1)' : 'rgba(72,72,72,0.1)',
                     color: status.isOpen ? '#00C896' : '#5C5C5C',
                     border: `1px solid ${status.isOpen ? 'rgba(0,200,150,0.22)' : '#222'}`,
@@ -333,7 +414,7 @@ export function MapScreen() {
   );
 }
 
-/* ── Map vendor popup ──────────────────────────────────────────────────── */
+/* ── Map vendor popup ─────────────────────────────────────────────────────── */
 function MapPreviewPopup({
   vendor, onClose, onOpen,
 }: {

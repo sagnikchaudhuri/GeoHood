@@ -97,14 +97,16 @@ function CTAButton({ label, onClick, disabled, icon }: {
    VendorRegistration
    ═══════════════════════════════════════════════════════════════════════════ */
 export function VendorRegistration({ onClose }: Props) {
-  const { registerVendor, user } = useUser();
+  const { registerVendor, user, selectedLocality } = useUser();
 
   const [step, setStep]                             = useState<Step>(1);
   const [businessName, setBusinessName]             = useState('');
   const [selectedCategory, setSelectedCategory]     = useState<VendorCategory | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [locality, setLocality]                     = useState(
-    user?.locality ? LOCALITIES.find(l => l.name === user.locality)?.id ?? 'patuli' : 'patuli'
+    // Prefer persisted selectedLocality, fallback to user.locality name lookup, then Patuli
+    selectedLocality
+      || (user?.locality ? LOCALITIES.find(l => l.name === user.locality)?.id ?? 'patuli' : 'patuli')
   );
   const [whatsapp, setWhatsapp]   = useState(user?.phone ?? '');
   const [description, setDescription] = useState('');
