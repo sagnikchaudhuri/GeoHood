@@ -65,19 +65,20 @@ export function OnboardingScreen() {
 
   return (
     <div
-      className="flex flex-col h-full items-center justify-between px-6 py-10"
-      style={{ background: '#0D0D0D' }}
+      className="flex flex-col h-full"
+      style={{ background: '#0D0D0D', overflowY: 'auto', scrollbarWidth: 'none' }}
     >
-      {/* Logo */}
-      <div className="flex flex-col items-center gap-3 pt-6">
-        <GeoHoodLogoMark size={52} />
+      {/* ── Logo — fixed at top, compact ── */}
+      <div className="flex-none flex flex-col items-center gap-2 pt-10 pb-6 px-6">
+        <GeoHoodLogoMark size={48} />
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#EBEBEB]">GeoHood</h1>
-          <p className="text-xs text-[#5C5C5C] tracking-widest uppercase mt-0.5">Hyperlocal</p>
+          <h1 className="text-xl font-bold text-[#EBEBEB] tracking-tight">GeoHood</h1>
+          <p className="text-[10px] text-[#5C5C5C] tracking-widest uppercase mt-0.5">Hyperlocal</p>
         </div>
       </div>
 
-      {/* Step content */}
+      {/* ── Step content — centred in remaining space ── */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-4">
       <AnimatePresence mode="wait">
         {step === 'welcome' && (
           <motion.div
@@ -238,9 +239,10 @@ export function OnboardingScreen() {
               }
             </button>
 
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 w-px bg-[#1E1E1E] ml-4" />
-              <p className="text-center text-xs text-[#3A3A3A] mb-2">or select</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-[#1E1E1E]" />
+              <p className="text-[11px] text-[#3A3A3A] font-medium">or select</p>
+              <div className="flex-1 h-px bg-[#1E1E1E]" />
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -271,17 +273,21 @@ export function OnboardingScreen() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
-      {/* Step dots */}
-      <div className="flex items-center gap-2">
+      {/* ── Step dots — pinned at bottom with safe area ── */}
+      <div
+        className="flex-none flex items-center justify-center gap-2"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 28px)', paddingTop: 16 }}
+      >
         {(['welcome', 'phone', 'otp', 'location'] as Step[]).map(s => (
           <div
             key={s}
-            className="rounded-full transition-all"
+            className="rounded-full transition-all duration-300"
             style={{
-              width:   step === s ? 20 : 6,
-              height:  6,
-              background: step === s ? '#00C896' : '#2A2A2A',
+              width:      step === s ? 20 : 6,
+              height:     6,
+              background: step === s ? '#00C896' : '#252525',
             }}
           />
         ))}

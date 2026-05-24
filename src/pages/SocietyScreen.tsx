@@ -38,7 +38,10 @@ export function SocietyScreen() {
   return (
     <div className="flex flex-col h-full bg-[#0D0D0D] relative">
       {/* Header */}
-      <div className="flex-none px-5 pt-5 pb-4 border-b border-[#1A1A1A]">
+      <div
+        className="flex-none px-5 pb-4 border-b border-[#1A1A1A]"
+        style={{ paddingTop: 'calc(var(--safe-top) + 20px)' }}
+      >
         <div className="flex items-center gap-2 mb-1">
           <Users size={18} color="#00C896" />
           <h1 className="text-lg font-bold text-[#EBEBEB]">Society</h1>

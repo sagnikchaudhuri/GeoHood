@@ -27,7 +27,7 @@ function renderScreen(tab: TabName) {
   }
 }
 
-/* ── Floating profile avatar button ─────────────────────────────────────── */
+/* ── Floating profile button ─────────────────────────────────────────────── */
 interface FloatingProfileProps {
   onClick: () => void;
   initials: string | null;
@@ -37,59 +37,48 @@ function FloatingProfileButton({ onClick, initials }: FloatingProfileProps) {
   return (
     <motion.button
       onClick={onClick}
-      whileHover={{ scale: 1.08 }}
       whileTap={{ scale: 0.92 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       aria-label="Open profile"
       style={{
-        position:      'absolute',
-        right:         16,
-        /* 4/5 down the screen area (between top and nav). We position from bottom
-           of the screen area so it always sits just above the nav regardless of dvh. */
-        bottom:        'calc(var(--nav-height) + 20px)',
-        zIndex:        35,
-        width:         44,
-        height:        44,
-        borderRadius:  '50%',
-        display:       'flex',
-        alignItems:    'center',
-        justifyContent:'center',
-        background:    'rgba(16,16,16,0.88)',
-        backdropFilter:'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border:        '1px solid rgba(255,255,255,0.07)',
-        boxShadow:     '0 4px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.03)',
+        width:          40,
+        height:         40,
+        borderRadius:   '50%',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        background:     'rgba(20,20,20,0.94)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        border:         '1px solid rgba(255,255,255,0.08)',
+        boxShadow:      '0 2px 12px rgba(0,0,0,0.5)',
       }}
     >
       {initials ? (
-        <span
-          style={{
-            fontSize:   13,
-            fontWeight: 700,
-            color:      '#00C896',
-            letterSpacing: '-0.02em',
-          }}
-        >
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#00C896', letterSpacing: '-0.02em' }}>
           {initials}
         </span>
       ) : (
-        <User size={18} color="#5C5C5C" strokeWidth={1.8} />
+        <User size={16} color="#5C5C5C" strokeWidth={1.8} />
       )}
     </motion.button>
   );
 }
 
-/* ── App shell (rendered after onboarding) ───────────────────────────────── */
+/* ── App shell ───────────────────────────────────────────────────────────── */
 function AppShell() {
-  const { activeTab }    = useAppContext();
+  const { activeTab } = useAppContext();
   const { user, myVendor } = useUser();
 
-  const [vendorModal,  setVendorModal]  = useState<'register' | 'dashboard' | null>(null);
-  const [profileOpen,  setProfileOpen]  = useState(false);
+  const [vendorModal, setVendorModal] = useState<'register' | 'dashboard' | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const initials = user?.name
     ? user.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
     : null;
+
+  /* Profile button only on content tabs — never over map or search */
+  const showProfileBtn = activeTab === 'home' || activeTab === 'society' || activeTab === 'community';
 
   const handleVendorPress = () => {
     setVendorModal(myVendor ? 'dashboard' : 'register');
@@ -97,48 +86,76 @@ function AppShell() {
 
   return (
     <div
-      className="flex flex-col"
       style={{
-        width:    '100%',
-        maxWidth: '480px',
-        height:   '100dvh',
-        margin:   '0 auto',
+        width:      '100%',
+        maxWidth:   '480px',
+        height:     '100dvh',
+        margin:     '0 auto',
         background: '#0D0D0D',
-        position: 'relative',
-        overflow: 'hidden',
+        position:   'relative',
+        overflow:   'hidden',
+        display:    'flex',
+        flexDirection: 'column',
       }}
     >
-      {/* Screen area */}
-      <div className="flex-1 overflow-hidden relative">
+      {/* ── Screen area ── */}
+      <div
+        style={{
+          flex:     1,
+          minHeight: 0,
+          overflow:  'hidden',
+          position:  'relative',
+        }}
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="absolute inset-0"
+            transition={{ duration: 0.1 }}
+            style={{ position: 'absolute', inset: 0 }}
           >
             {renderScreen(activeTab)}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Floating profile button — sits above the nav, right edge */}
-      <FloatingProfileButton
-        onClick={() => setProfileOpen(true)}
-        initials={initials}
-      />
+      {/* ── Floating profile button — top-right of content area ── */}
+      <AnimatePresence>
+        {showProfileBtn && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.75 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.75 }}
+            transition={{ duration: 0.18 }}
+            style={{
+              position: 'absolute',
+              right:    16,
+              /* Sits just above the nav, well clear of content */
+              bottom:   `calc(var(--nav-height) + var(--safe-bottom) + 14px)`,
+              zIndex:   45, /* --z-float */
+            }}
+          >
+            <FloatingProfileButton onClick={() => setProfileOpen(true)} initials={initials} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Bottom nav */}
+      {/* ── Bottom navigation ── */}
       <BottomNavBar onVendorPress={handleVendorPress} />
 
-      {/* ── Overlays (z-index stacking) ── */}
+      {/* ══════════════════════════════════════════
+          OVERLAY STACK  — z-index 40–80
+          All overlays sit above the screen area.
+          z-40 = VendorDetailSheet
+          z-60 = full-screen modals
+          ══════════════════════════════════════════ */}
 
-      {/* Vendor detail sheet */}
+      {/* Vendor detail sheet (z-40) */}
       <VendorDetailSheet />
 
-      {/* Vendor Registration / Dashboard */}
+      {/* Vendor Registration / Dashboard (z-60) */}
       <AnimatePresence>
         {vendorModal === 'register' && (
           <VendorRegistration onClose={() => setVendorModal(null)} />
@@ -148,7 +165,7 @@ function AppShell() {
         )}
       </AnimatePresence>
 
-      {/* Profile modal */}
+      {/* Profile modal (z-60) */}
       <AnimatePresence>
         {profileOpen && (
           <ProfileScreen onClose={() => setProfileOpen(false)} />
@@ -166,13 +183,13 @@ function GatedApp() {
     return (
       <div
         style={{
-          width:    '100%',
-          maxWidth: '480px',
-          height:   '100dvh',
-          margin:   '0 auto',
+          width:      '100%',
+          maxWidth:   '480px',
+          height:     '100dvh',
+          margin:     '0 auto',
           background: '#0D0D0D',
-          position: 'relative',
-          overflow: 'hidden',
+          position:   'relative',
+          overflow:   'hidden',
         }}
       >
         <OnboardingScreen />

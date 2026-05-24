@@ -33,7 +33,10 @@ export function SearchScreen() {
   return (
     <div className="flex flex-col h-full bg-[#0D0D0D]">
       {/* Search header */}
-      <div className="flex-none px-5 pt-5 pb-3" style={{ borderBottom: '1px solid #1A1A1A' }}>
+      <div
+        className="flex-none px-5 pb-3"
+        style={{ borderBottom: '1px solid #1A1A1A', paddingTop: 'calc(var(--safe-top) + 20px)' }}
+      >
         <div className="flex items-center gap-2 px-3.5 py-3 rounded-2xl border transition-colors"
           style={{ background: '#161616', borderColor: localQuery ? 'rgba(0,200,150,0.4)' : '#2A2A2A' }}
         >

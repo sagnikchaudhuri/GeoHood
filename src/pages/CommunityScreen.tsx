@@ -141,7 +141,10 @@ export function CommunityScreen() {
   return (
     <div className="flex flex-col h-full bg-[#0D0D0D]">
       {/* Header */}
-      <div className="flex-none px-5 pt-5 pb-4 border-b border-[#1A1A1A]">
+      <div
+        className="flex-none px-5 pb-4 border-b border-[#1A1A1A]"
+        style={{ paddingTop: 'calc(var(--safe-top) + 20px)' }}
+      >
         <h1 className="text-lg font-bold text-[#EBEBEB]">Community</h1>
         <p className="text-xs text-[#5C5C5C] mt-0.5">Coming Soon</p>
       </div>

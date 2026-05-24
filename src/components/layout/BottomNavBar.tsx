@@ -31,9 +31,12 @@ export function BottomNavBar({ onVendorPress }: Props) {
     <nav
       className="flex-none flex items-stretch"
       style={{
-        height:     'var(--nav-height)',
-        background: '#111111',
-        borderTop:  '1px solid #1A1A1A',
+        minHeight:     'var(--nav-height)',
+        paddingBottom: 'var(--safe-bottom)',
+        background:    '#111111',
+        borderTop:     '1px solid #1A1A1A',
+        /* Prevent nav from shrinking on short viewports */
+        flexShrink:    0,
       }}
     >
       {TABS.map(tab => {
@@ -46,11 +49,11 @@ export function BottomNavBar({ onVendorPress }: Props) {
           return (
             <button
               key="add"
-              className="flex-1 flex flex-col items-center justify-center gap-1"
+              className="flex-1 flex flex-col items-center pb-1 justify-center gap-1"
               onClick={() => handlePress('add')}
             >
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center -mt-5 shadow-lg transition-all"
+                className="w-12 h-12 rounded-full flex items-center justify-center -mt-6 shadow-lg transition-all"
                 style={{
                   background: myVendor
                     ? 'linear-gradient(135deg, #1A3A2F, #0D2A20)'

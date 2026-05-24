@@ -20,10 +20,13 @@ export function TopBar({ scrolled = false }: TopBarProps) {
     <header
       className="flex-none flex items-center gap-3 px-4 transition-all duration-200"
       style={{
-        height:       'var(--topbar-height)',
-        background:   scrolled ? 'rgba(13,13,13,0.96)' : 'transparent',
-        borderBottom: scrolled ? '1px solid #1A1A1A' : '1px solid transparent',
-        backdropFilter: scrolled ? 'blur(12px)' : 'none',
+        height:          'calc(var(--topbar-height) + var(--safe-top))',
+        paddingTop:      'calc(var(--safe-top) + 8px)',
+        background:      scrolled ? 'rgba(13,13,13,0.96)' : 'transparent',
+        borderBottom:    scrolled ? '1px solid #1A1A1A' : '1px solid transparent',
+        backdropFilter:  scrolled ? 'blur(12px)' : 'none',
+        WebkitBackdropFilter: scrolled ? 'blur(12px)' : 'none',
+        flexShrink:      0,
       }}
     >
       {/* Hamburger */}
