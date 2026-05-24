@@ -14,6 +14,8 @@ import { SocietyScreen }             from './pages/SocietyScreen';
 import { CommunityScreen }           from './pages/CommunityScreen';
 import { VendorDetailPage }          from './pages/VendorDetailPage';
 import { CategoryResultsScreen }     from './pages/CategoryResultsScreen';
+import { TopPicksAllScreen }         from './pages/TopPicksAllScreen';
+import { AllCategoriesScreen }       from './pages/AllCategoriesScreen';
 import { TabName } from './types';
 
 function renderScreen(tab: TabName) {
@@ -109,6 +111,24 @@ function AppShell() {
                 <ProfileScreen
                   key={`profile_${i}`}
                   onClose={popOverlay}
+                />
+              );
+            }
+
+            if (screen.type === 'top_picks_all') {
+              return (
+                <TopPicksAllScreen
+                  key={`top_picks_${i}`}
+                  onBack={popOverlay}
+                />
+              );
+            }
+
+            if (screen.type === 'all_categories') {
+              return (
+                <AllCategoriesScreen
+                  key={`all_cats_${i}`}
+                  onBack={popOverlay}
                 />
               );
             }

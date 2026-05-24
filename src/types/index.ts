@@ -4,6 +4,8 @@ export type OverlayScreen =
   | { type: 'profile' }
   | { type: 'category_results'; categoryId: string; label: string }
   | { type: 'vendor_detail'; vendor: Vendor }
+  | { type: 'top_picks_all' }
+  | { type: 'all_categories' }
 
 // ─── Core Domain Types ──────────────────────────────────────────────────────
 

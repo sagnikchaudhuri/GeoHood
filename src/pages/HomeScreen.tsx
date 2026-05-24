@@ -246,7 +246,7 @@ export function HomeScreen() {
           {/* ── Top Picks ── */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ padding: '0 20px' }}>
-              <SectionHeader title="Top Picks Near You" action="See all" />
+              <SectionHeader title="Top Picks Near You" action="See all" onAction={() => pushOverlay({ type: 'top_picks_all' })} />
             </div>
             <div
               className="scrollbar-none"
@@ -267,7 +267,7 @@ export function HomeScreen() {
 
           {/* ── Categories ── */}
           <div style={{ padding: '0 20px', marginBottom: 24 }}>
-            <SectionHeader title="Categories" action="View all" onAction={() => setActiveTab('search')} />
+            <SectionHeader title="Categories" action="View all" onAction={() => pushOverlay({ type: 'all_categories' })} />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {HOME_CATS.map(cat => (
                 <motion.button
