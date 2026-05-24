@@ -443,6 +443,133 @@ function PrivacySafetyPage({ onBack }: { onBack: () => void }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   DELETE VENDOR MODAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+function DeleteVendorModal({
+  businessName,
+  onConfirm,
+  onCancel,
+}: {
+  businessName: string;
+  onConfirm: () => void;
+  onCancel:  () => void;
+}) {
+  const [inputVal, setInputVal]  = useState('');
+  const [error,    setError]     = useState(false);
+
+  const matches = inputVal.trim().toLowerCase() === businessName.trim().toLowerCase();
+
+  const handleDelete = () => {
+    if (!matches) { setError(true); return; }
+    onConfirm();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 25,
+        display: 'flex', alignItems: 'flex-end',
+        background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}
+      onClick={onCancel}
+    >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', background: '#161616',
+          borderRadius: '24px 24px 0 0', padding: '8px 20px',
+          paddingBottom: 'calc(var(--safe-bottom, 0px) + 24px)',
+        }}
+      >
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 20px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 9999, background: '#2A2A2A' }} />
+        </div>
+
+        {/* Icon */}
+        <div style={{
+          width: 52, height: 52, borderRadius: 16,
+          background: 'rgba(255,77,106,0.1)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+        }}>
+          <Trash2 size={22} color="#FF4D6A" />
+        </div>
+
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: '#EBEBEB', textAlign: 'center', margin: '0 0 8px', letterSpacing: '-0.02em' }}>
+          Delete Vendor Listing?
+        </h2>
+        <p style={{ fontSize: 13, color: '#5C5C5C', textAlign: 'center', margin: '0 0 20px', lineHeight: 1.6 }}>
+          This will permanently remove your vendor listing and all leads. Your resident account stays intact.
+        </p>
+
+        {/* Business name confirmation input */}
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: '#5C5C5C', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>
+            Type your business name to confirm
+          </p>
+          <input
+            type="text"
+            value={inputVal}
+            onChange={e => { setInputVal(e.target.value); setError(false); }}
+            placeholder={businessName}
+            autoFocus
+            style={{
+              width: '100%', padding: '13px 14px', borderRadius: 14,
+              background: '#1A1A1A',
+              border: `1px solid ${error ? '#FF4D6A' : (matches && inputVal ? 'rgba(0,200,150,0.4)' : '#2A2A2A')}`,
+              color: '#EBEBEB', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+              transition: 'border-color 0.2s',
+            }}
+          />
+          {error && (
+            <p style={{ fontSize: 11, color: '#FF4D6A', margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <AlertCircle size={11} />
+              Name doesn't match — check spelling and try again.
+            </p>
+          )}
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: '14px', borderRadius: 16,
+              border: '1px solid #2A2A2A', background: '#1A1A1A',
+              fontSize: 14, fontWeight: 600, color: '#ADADAD', cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            style={{
+              flex: 1, padding: '14px', borderRadius: 16,
+              border: 'none',
+              background: matches ? '#FF4D6A' : 'rgba(255,77,106,0.2)',
+              fontSize: 14, fontWeight: 700,
+              color: matches ? 'white' : 'rgba(255,77,106,0.45)',
+              cursor: matches ? 'pointer' : 'not-allowed',
+              transition: 'background 0.2s, color 0.2s',
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    SIGN-OUT CONFIRM MODAL
    ═══════════════════════════════════════════════════════════════════════════ */
 function SignOutModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
@@ -654,12 +781,14 @@ function PhotoOptionsSheet({
 export function ProfileScreen({ onClose }: Props) {
   const {
     user, myVendor, selectedLocality, savedVendorIds,
-    notificationsEnabled, signOut,
+    notificationsEnabled, signOut, deleteVendor,
     profilePhoto, setProfilePhoto,
   } = useUser();
-  const [section, setSection]         = useState<Section>('main');
-  const [showSignOut, setShowSignOut]  = useState(false);
-  const [showPhotoOpts, setShowPhotoOpts] = useState(false);
+  const [section, setSection]               = useState<Section>('main');
+  const [showSignOut, setShowSignOut]        = useState(false);
+  const [showPhotoOpts, setShowPhotoOpts]   = useState(false);
+  const [showDeleteVendor, setShowDeleteVendor] = useState(false);
+  const [toastMsg, setToastMsg]             = useState<string | null>(null);
 
   // Hidden file inputs
   const cameraInputRef  = useRef<HTMLInputElement>(null);
@@ -722,16 +851,23 @@ export function ProfileScreen({ onClose }: Props) {
       icon: Shield, label: 'Privacy & Safety', sub: '',
       section: 'privacy' as Section,
     },
-    ...(myVendor ? [{
-      icon: Store, label: 'My Business', sub: myVendor.businessName,
-      section: 'main' as Section,
-    }] : []),
   ];
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 2500);
+  };
 
   const handleSignOut = () => {
     signOut();
     setShowSignOut(false);
     onClose();
+  };
+
+  const handleDeleteVendorConfirm = () => {
+    deleteVendor();
+    setShowDeleteVendor(false);
+    showToast('Vendor listing deleted.');
   };
 
   return (
@@ -927,8 +1063,22 @@ export function ProfileScreen({ onClose }: Props) {
           })}
         </div>
 
-        {/* Sign out + version */}
-        <div style={{ padding: '8px 20px 32px' }}>
+        {/* Delete Vendor Listing (only if vendor) + Sign Out + version */}
+        <div style={{ padding: '8px 20px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {myVendor && (
+            <button
+              onClick={() => setShowDeleteVendor(true)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '13px', borderRadius: 16, fontSize: 13, fontWeight: 600,
+                border: '1px solid rgba(255,77,106,0.15)', background: 'rgba(255,77,106,0.04)',
+                color: '#FF4D6A', cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={15} />
+              Delete Vendor Listing
+            </button>
+          )}
           <button
             onClick={() => setShowSignOut(true)}
             style={{
@@ -941,10 +1091,40 @@ export function ProfileScreen({ onClose }: Props) {
             <LogOut size={15} />
             Sign Out
           </button>
-          <p style={{ textAlign: 'center', fontSize: 11, color: '#2A2A2A', marginTop: 16 }}>
+          <p style={{ textAlign: 'center', fontSize: 11, color: '#2A2A2A', margin: 0 }}>
             GeoHood V1 · {localityName}, Kolkata
           </p>
         </div>
+
+        {/* Toast notification */}
+        <AnimatePresence>
+          {toastMsg && (
+            <motion.div
+              key="toast"
+              initial={{ opacity: 0, y: 16, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              style={{
+                position: 'absolute',
+                bottom: 'calc(var(--safe-bottom, 0px) + 24px)',
+                left: '50%', transform: 'translateX(-50%)',
+                background: '#161616',
+                border: '1px solid rgba(0,200,150,0.3)',
+                borderRadius: 12,
+                padding: '10px 18px',
+                fontSize: 13, fontWeight: 600, color: '#00C896',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                zIndex: 50,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}
+            >
+              <Check size={14} color="#00C896" />
+              {toastMsg}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Sub-pages overlay ── */}
@@ -964,6 +1144,17 @@ export function ProfileScreen({ onClose }: Props) {
             onGallery={handleGallery}
             onRemove={handleRemovePhoto}
             onCancel={() => setShowPhotoOpts(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Delete vendor confirm ── */}
+      <AnimatePresence>
+        {showDeleteVendor && myVendor && (
+          <DeleteVendorModal
+            businessName={myVendor.businessName}
+            onConfirm={handleDeleteVendorConfirm}
+            onCancel={() => setShowDeleteVendor(false)}
           />
         )}
       </AnimatePresence>

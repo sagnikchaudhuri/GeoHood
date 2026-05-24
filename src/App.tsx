@@ -57,10 +57,11 @@ function AppShell() {
       {/* ── Screen area ── */}
       <div
         style={{
-          flex:     1,
+          flex:      1,
           minHeight: 0,
           overflow:  'hidden',
           position:  'relative',
+          isolation: 'isolate',   // ← contains MapScreen z-indexes; VendorModal z-60 at AppShell level wins
         }}
       >
         <AnimatePresence mode="wait">

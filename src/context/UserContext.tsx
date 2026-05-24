@@ -104,6 +104,9 @@ interface UserContextValue {
   profilePhoto:    string | null;
   setProfilePhoto: (dataUrl: string | null) => void;
 
+  // Delete vendor listing (keeps user account, clears vendor data + leads)
+  deleteVendor: () => void;
+
   // Sign out
   signOut: () => void;
 }
@@ -283,6 +286,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const deleteVendor = useCallback(() => {
+    setMyVendor(null);
+    setLeads([]);
+    setUserState(prev => prev
+      ? { ...prev, roles: prev.roles.filter(r => r !== 'vendor') }
+      : prev,
+    );
+  }, []);
+
   const setProfilePhoto = useCallback((dataUrl: string | null) => {
     setProfilePhotoState(dataUrl);
   }, []);
@@ -324,6 +336,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       locationPermission, locationStatus,
       requestUserLocation,
       profilePhoto, setProfilePhoto,
+      deleteVendor,
       signOut,
     }}>
       {children}
