@@ -102,6 +102,17 @@ export interface UserProfile {
   roles:    UserRole[];
 }
 
+// ─── Location ─────────────────────────────────────────────────────────────────
+
+export interface LocationState {
+  lat:       number;
+  lng:       number;
+  accuracy:  number | null;
+  locality:  string;          // locality id, e.g. 'patuli'
+  source:    'gps' | 'manual' | 'fallback';
+  updatedAt: number;          // Date.now()
+}
+
 // ─── Vendor Registration ──────────────────────────────────────────────────────
 
 export interface RegisteredVendor {
@@ -114,6 +125,12 @@ export interface RegisteredVendor {
   description:  string;
   isLive:       boolean;
   registeredAt: number;
+  // Optional physical store coordinates
+  storeLocation?: {
+    lat:      number;
+    lng:      number;
+    locality: string;
+  };
 }
 
 // ─── Lead Tracking ────────────────────────────────────────────────────────────

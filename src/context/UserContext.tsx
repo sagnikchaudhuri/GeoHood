@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
-  UserProfile, RegisteredVendor, Lead, ResidenceRegistration,
+  UserProfile, RegisteredVendor, Lead, ResidenceRegistration, LocationState,
 } from '../types';
-import { requestGeolocation, LocationResult, mockReverseGeocode } from '../utils/locationService';
-import { useLiveLocation, LocationStatus } from '../hooks/useLiveLocation';
+import {
+  requestGeolocation, LocationResult,
+  mockReverseGeocode, PATULI_FALLBACK_LAT, PATULI_FALLBACK_LNG,
+} from '../utils/locationService';
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
 
@@ -22,10 +24,24 @@ const GH_KEYS = [
   'gh_onboarded', 'gh_user', 'gh_vendor', 'gh_leads',
   'gh_residence', 'gh_seen_soc', 'gh_locality', 'gh_locality_manual',
   'gh_saved_vendors', 'gh_notifications',
-  'gh_lat', 'gh_lng', 'gh_accuracy', 'gh_loc_perm',
+  'gh_location',        // single LocationState blob (replaces gh_lat/gh_lng/gh_accuracy)
+  'gh_loc_perm',        // 'unknown' | 'granted' | 'denied'
 ];
 
+/* ─── Fallback location (Patuli) ─────────────────────────────────────────── */
+const PATULI_LOCATION: LocationState = {
+  lat:       PATULI_FALLBACK_LAT,
+  lng:       PATULI_FALLBACK_LNG,
+  accuracy:  null,
+  locality:  'patuli',
+  source:    'fallback',
+  updatedAt: 0,
+};
+
 // ─── Context shape ────────────────────────────────────────────────────────────
+
+export type LocationPermission = 'unknown' | 'granted' | 'denied';
+export type LocationStatus = 'idle' | 'detecting' | 'success' | 'denied' | 'error';
 
 interface UserContextValue {
   // Onboarding
@@ -54,7 +70,7 @@ interface UserContextValue {
 
   // Locality
   selectedLocality:    string;
-  setSelectedLocality: (id: string) => void; // manual selection — locks override
+  setSelectedLocality: (id: string) => void;
 
   // Saved vendors
   savedVendorIds:    string[];
@@ -65,17 +81,23 @@ interface UserContextValue {
   notificationsEnabled: boolean;
   toggleNotifications:  () => void;
 
-  // GPS Location — updated live by watchPosition
+  // ── GPS / Location ─────────────────────────────────────────────────────────
+  /** Full location state — single source of truth */
+  location:           LocationState | null;
+  /** Convenience: lat | null */
   userLat:            number | null;
+  /** Convenience: lng | null */
   userLng:            number | null;
-  userAccuracy:       number | null; // metres, from GPS
-  locationPermission: 'unknown' | 'granted' | 'denied';
-  locationStatus:     LocationStatus; // fine-grained UI state
+  /** Convenience: accuracy metres | null */
+  userAccuracy:       number | null;
+  locationPermission: LocationPermission;
+  locationStatus:     LocationStatus;
 
-  // One-shot request used by Onboarding / Profile
+  /**
+   * Calls getCurrentPosition, updates location state, persists.
+   * Used by: Onboarding, Profile LocalitySelector, MapScreen recenter.
+   */
   requestUserLocation: () => Promise<LocationResult>;
-  // Start continuous tracking (called automatically after permission grant)
-  startLiveTracking:   () => void;
 
   // Sign out
   signOut: () => void;
@@ -86,6 +108,7 @@ const UserContext = createContext<UserContextValue | null>(null);
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
+
   const [hasOnboarded, setHasOnboarded]         = useState(() => load('gh_onboarded', false));
   const [user, setUserState]                    = useState<UserProfile | null>(() => load('gh_user', null));
   const [myVendor, setMyVendor]                 = useState<RegisteredVendor | null>(() => load('gh_vendor', null));
@@ -96,68 +119,36 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [localityManualOverride, setLMO]        = useState(() => load('gh_locality_manual', false));
   const [savedVendorIds, setSavedVendorIds]     = useState<string[]>(() => load('gh_saved_vendors', []));
   const [notificationsEnabled, setNotifications]= useState(() => load('gh_notifications', true));
-  const [userLat,      setUserLatState]         = useState<number | null>(() => load('gh_lat',      null));
-  const [userLng,      setUserLngState]         = useState<number | null>(() => load('gh_lng',      null));
-  const [userAccuracy, setUserAccuracyState]    = useState<number | null>(() => load('gh_accuracy', null));
-  const [locationPermission, setLocPermission]  = useState<'unknown' | 'granted' | 'denied'>(
-    () => load('gh_loc_perm', 'unknown'),
-  );
 
-  // ── Live location hook ───────────────────────────────────────────────────
-  const { coords: liveCoords, status: liveStatus, startTracking } = useLiveLocation();
+  // ── Single location state blob ─────────────────────────────────────────────
+  const [location, setLocationState]       = useState<LocationState | null>(() => load('gh_location', null));
+  const [locationPermission, setLocPerm]   = useState<LocationPermission>(() => load('gh_loc_perm', 'unknown'));
+  const [locationStatus, setLocStatus]     = useState<LocationStatus>('idle');
 
-  // Ref so sync effects can read latest override without needing it in deps
+  // Derived convenience getters
+  const userLat:      number | null = location?.lat      ?? null;
+  const userLng:      number | null = location?.lng      ?? null;
+  const userAccuracy: number | null = location?.accuracy ?? null;
+
+  // Ref: latest override flag without adding to effect deps
   const lmoRef = useRef(localityManualOverride);
   useEffect(() => { lmoRef.current = localityManualOverride; }, [localityManualOverride]);
 
-  // ── Auto-start tracking if permission was already granted ─────────────────
-  const autoStarted = useRef(false);
-  useEffect(() => {
-    if (!autoStarted.current && load<string>('gh_loc_perm', 'unknown') === 'granted') {
-      autoStarted.current = true;
-      console.log('[GeoHood Location] Auto-starting live tracking (permission previously granted)');
-      startTracking();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // mount only
-
-  // ── Sync live coords → context state (runs on every GPS fix) ─────────────
-  useEffect(() => {
-    if (!liveCoords) return;
-    setUserLatState(liveCoords.lat);
-    setUserLngState(liveCoords.lng);
-    setUserAccuracyState(liveCoords.accuracy);
-    setLocPermission('granted');
-    // Update locality only when user has NOT manually chosen one
-    if (!lmoRef.current) {
-      const localityId = mockReverseGeocode(liveCoords.lat, liveCoords.lng);
-      setLocalityState(localityId);
-    }
-  }, [liveCoords]);
-
-  // ── Sync live status → permission state ───────────────────────────────────
-  useEffect(() => {
-    if (liveStatus === 'denied')   setLocPermission('denied');
-    if (liveStatus === 'tracking') setLocPermission('granted');
-  }, [liveStatus]);
-
-  // ── Persist ───────────────────────────────────────────────────────────────
-  useEffect(() => { save('gh_onboarded',       hasOnboarded);          }, [hasOnboarded]);
-  useEffect(() => { save('gh_user',            user);                  }, [user]);
-  useEffect(() => { save('gh_vendor',          myVendor);              }, [myVendor]);
-  useEffect(() => { save('gh_leads',           leads);                 }, [leads]);
-  useEffect(() => { save('gh_residence',       residence);             }, [residence]);
+  // ── Persist ────────────────────────────────────────────────────────────────
+  useEffect(() => { save('gh_onboarded',       hasOnboarded);           }, [hasOnboarded]);
+  useEffect(() => { save('gh_user',            user);                   }, [user]);
+  useEffect(() => { save('gh_vendor',          myVendor);               }, [myVendor]);
+  useEffect(() => { save('gh_leads',           leads);                  }, [leads]);
+  useEffect(() => { save('gh_residence',       residence);              }, [residence]);
   useEffect(() => { save('gh_seen_soc',        hasSeenSocietyOnboarding); }, [hasSeenSocietyOnboarding]);
-  useEffect(() => { save('gh_locality',        selectedLocality);      }, [selectedLocality]);
-  useEffect(() => { save('gh_locality_manual', localityManualOverride);}, [localityManualOverride]);
-  useEffect(() => { save('gh_saved_vendors',   savedVendorIds);        }, [savedVendorIds]);
-  useEffect(() => { save('gh_notifications',   notificationsEnabled);  }, [notificationsEnabled]);
-  useEffect(() => { save('gh_lat',             userLat);               }, [userLat]);
-  useEffect(() => { save('gh_lng',             userLng);               }, [userLng]);
-  useEffect(() => { save('gh_accuracy',        userAccuracy);          }, [userAccuracy]);
-  useEffect(() => { save('gh_loc_perm',        locationPermission);    }, [locationPermission]);
+  useEffect(() => { save('gh_locality',        selectedLocality);       }, [selectedLocality]);
+  useEffect(() => { save('gh_locality_manual', localityManualOverride); }, [localityManualOverride]);
+  useEffect(() => { save('gh_saved_vendors',   savedVendorIds);         }, [savedVendorIds]);
+  useEffect(() => { save('gh_notifications',   notificationsEnabled);   }, [notificationsEnabled]);
+  useEffect(() => { save('gh_location',        location);               }, [location]);
+  useEffect(() => { save('gh_loc_perm',        locationPermission);     }, [locationPermission]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // ── Actions ────────────────────────────────────────────────────────────────
 
   const completeOnboarding = useCallback((profile: UserProfile) => {
     setUserState(profile);
@@ -166,16 +157,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const setUser = useCallback((u: UserProfile) => setUserState(u), []);
 
-  const registerVendor = useCallback((v: Omit<RegisteredVendor, 'id' | 'registeredAt' | 'isLive'>) => {
-    const vendor: RegisteredVendor = {
-      ...v, id: `vendor_${Date.now()}`, registeredAt: Date.now(), isLive: false,
-    };
-    setMyVendor(vendor);
-    setUserState(prev => prev
-      ? { ...prev, roles: [...new Set([...prev.roles, 'vendor' as const])] }
-      : prev,
-    );
-  }, []);
+  const registerVendor = useCallback(
+    (v: Omit<RegisteredVendor, 'id' | 'registeredAt' | 'isLive'>) => {
+      const vendor: RegisteredVendor = {
+        ...v, id: `vendor_${Date.now()}`, registeredAt: Date.now(), isLive: false,
+      };
+      setMyVendor(vendor);
+      setUserState(prev => prev
+        ? { ...prev, roles: [...new Set([...prev.roles, 'vendor' as const])] }
+        : prev,
+      );
+    },
+    [],
+  );
 
   const setVendorLive = useCallback((live: boolean) => {
     setMyVendor(prev => prev ? { ...prev, isLive: live } : prev);
@@ -200,11 +194,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const markSocietyOnboardingSeen = useCallback(() => setSeenSoc(true), []);
 
-  // Manual locality selection — sets override flag so live tracking won't overwrite
+  /** Manual locality selection — locks override so GPS won't overwrite it */
   const setSelectedLocality = useCallback((id: string) => {
     setLocalityState(id);
     setLMO(true);
-    console.log('[GeoHood Location] Manual locality selected:', id, '— auto-update locked');
+    console.log('[GeoHood Location] Manual locality selected:', id, '(override locked)');
   }, []);
 
   const toggleSavedVendor = useCallback((vendorId: string) => {
@@ -225,31 +219,50 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * requestUserLocation — one-shot getCurrentPosition used by Onboarding + Profile.
-   * On success it immediately starts continuous watchPosition tracking.
+   * requestUserLocation — getCurrentPosition (one-shot).
+   * Updates location state + locality + permission. Used everywhere.
    */
   const requestUserLocation = useCallback(async (): Promise<LocationResult> => {
-    console.log('[GeoHood Location] requestUserLocation called (one-shot + start tracking)');
+    console.log('[GeoHood Location] requestUserLocation: starting...');
+    setLocStatus('detecting');
+
     const result = await requestGeolocation();
+
     if (result.status === 'granted') {
-      setUserLatState(result.lat);
-      setUserLngState(result.lng);
-      setUserAccuracyState(null);
-      setLocPermission('granted');
+      const newLocation: LocationState = {
+        lat:       result.lat,
+        lng:       result.lng,
+        accuracy:  result.accuracy,
+        locality:  result.localityId,
+        source:    'gps',
+        updatedAt: Date.now(),
+      };
+      setLocationState(newLocation);
+      setLocPerm('granted');
+      setLocStatus('success');
+      console.log('[GeoHood Location] Location updated:', newLocation.lat, newLocation.lng);
+
+      // Only auto-update locality if user hasn't manually picked one
       if (!lmoRef.current) {
         setLocalityState(result.localityId);
+        console.log('[GeoHood Location] Locality updated to:', result.localityId);
       }
-      // Begin continuous tracking now that permission is confirmed
-      startTracking();
     } else {
-      setLocPermission('denied');
-    }
-    return result;
-  }, [startTracking]);
+      setLocPerm('denied');
+      setLocStatus(result.status === 'denied' ? 'denied' : 'error');
+      console.log('[GeoHood Location] Location failed:', result.status);
 
-  const startLiveTracking = useCallback(() => {
-    startTracking();
-  }, [startTracking]);
+      // Fall back to Patuli if no location was ever set
+      if (!location) {
+        setLocationState({ ...PATULI_LOCATION, updatedAt: Date.now() });
+        console.log('[GeoHood Location] Using Patuli fallback');
+      }
+    }
+
+    return result;
+  // location ref needed to check "no location was ever set"
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const signOut = useCallback(() => {
     GH_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
@@ -263,10 +276,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setLMO(false);
     setSavedVendorIds([]);
     setNotifications(true);
-    setUserLatState(null);
-    setUserLngState(null);
-    setUserAccuracyState(null);
-    setLocPermission('unknown');
+    setLocationState(null);
+    setLocPerm('unknown');
+    setLocStatus('idle');
   }, []);
 
   const myLeads = myVendor
@@ -284,9 +296,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       selectedLocality, setSelectedLocality,
       savedVendorIds, toggleSavedVendor, isVendorSaved,
       notificationsEnabled, toggleNotifications,
-      userLat, userLng, userAccuracy,
-      locationPermission, locationStatus: liveStatus,
-      requestUserLocation, startLiveTracking,
+      location, userLat, userLng, userAccuracy,
+      locationPermission, locationStatus,
+      requestUserLocation,
       signOut,
     }}>
       {children}

@@ -1,28 +1,33 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronDown, ChevronRight, Store, Phone, MapPin, CheckCircle2, Zap } from 'lucide-react';
+import {
+  X, ChevronDown, ChevronRight, Store, Phone, MapPin,
+  CheckCircle2, Zap, Navigation2,
+} from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { CATEGORY_GROUPS } from '../data/categories';
 import { LOCALITIES } from '../data/localities';
 import { VendorCategory } from '../types';
+import { MapLocationPicker, PickedLocation } from '../components/map/MapLocationPicker';
 
 interface Props {
   onClose: () => void;
 }
 
-type Step = 1 | 2 | 3 | 4;
-
-const STEP_LABELS = ['Basic Info', 'Category', 'Locality', 'Confirm'];
+// Steps: 1=Basic Info, 2=Category, 3=Store Location, 4=Locality, 5=Done
+type Step = 1 | 2 | 3 | 4 | 5;
+const STEP_LABELS = ['Business', 'Category', 'Location', 'Confirm'];
 
 /* ── Step indicator ────────────────────────────────────────────────────── */
 function StepIndicator({ current }: { current: Step }) {
+  // Map 5-step flow to 4-indicator display
+  const displayStep = current === 5 ? 4 : current === 4 ? 4 : current;
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, padding: '12px 16px' }}>
       {STEP_LABELS.map((label, i) => {
-        const num    = (i + 1) as Step;
-        const done   = num < current;
-        const active = num === current;
-
+        const num    = i + 1;
+        const done   = num < displayStep;
+        const active = num === displayStep;
         return (
           <React.Fragment key={num}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -33,7 +38,7 @@ function StepIndicator({ current }: { current: Step }) {
                 background:  active ? '#00C896' : done ? 'rgba(0,200,150,0.15)' : 'transparent',
                 border:      `1.5px solid ${active ? '#00C896' : done ? 'rgba(0,200,150,0.4)' : '#2A2A2A'}`,
                 color:       active ? 'white'   : done ? '#00C896'              : '#3A3A3A',
-                transition: 'all 0.2s',
+                transition:  'all 0.2s',
               }}>
                 {done ? <CheckCircle2 size={14} /> : num}
               </div>
@@ -49,7 +54,7 @@ function StepIndicator({ current }: { current: Step }) {
               <div style={{
                 flex: 1, height: 1.5, marginBottom: 16, marginLeft: 4, marginRight: 4,
                 minWidth: 12, maxWidth: 36,
-                background: num < current ? '#00C896' : '#1E1E1E',
+                background: num < displayStep ? '#00C896' : '#1E1E1E',
                 transition: 'background 0.3s',
               }} />
             )}
@@ -97,26 +102,33 @@ function CTAButton({ label, onClick, disabled, icon }: {
    VendorRegistration
    ═══════════════════════════════════════════════════════════════════════════ */
 export function VendorRegistration({ onClose }: Props) {
-  const { registerVendor, user, selectedLocality } = useUser();
+  const { registerVendor, user, selectedLocality, requestUserLocation } = useUser();
 
-  const [step, setStep]                             = useState<Step>(1);
-  const [businessName, setBusinessName]             = useState('');
-  const [selectedCategory, setSelectedCategory]     = useState<VendorCategory | null>(null);
+  const [step,                setStep]               = useState<Step>(1);
+  const [businessName,        setBusinessName]        = useState('');
+  const [selectedCategory,    setSelectedCategory]    = useState<VendorCategory | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  const [locality, setLocality]                     = useState(
-    // Prefer persisted selectedLocality, fallback to user.locality name lookup, then Patuli
+  const [locality,            setLocality]            = useState(
     selectedLocality
       || (user?.locality ? LOCALITIES.find(l => l.name === user.locality)?.id ?? 'patuli' : 'patuli')
   );
-  const [whatsapp, setWhatsapp]   = useState(user?.phone ?? '');
-  const [description, setDescription] = useState('');
-  const [expandedCat, setExpandedCat] = useState<string | null>(null);
+  const [whatsapp,     setWhatsapp]     = useState(user?.phone ?? '');
+  const [description,  setDescription]  = useState('');
+  const [expandedCat,  setExpandedCat]  = useState<string | null>(null);
+
+  // ── Store location state ─────────────────────────────────────────────────
+  const [hasPhysicalStore,  setHasPhysicalStore]  = useState<boolean | null>(null); // null = not answered
+  const [storeLocation,     setStoreLocation]     = useState<PickedLocation | null>(null);
+  const [showMapPicker,     setShowMapPicker]      = useState(false);
+  const [detectingForStore, setDetectingForStore]  = useState(false);
 
   const selectedCatGroup = CATEGORY_GROUPS.find(g => g.id === selectedCategory);
   const localityName     = LOCALITIES.find(l => l.id === locality)?.name ?? 'Patuli';
 
   const canStep1  = businessName.trim().length >= 2;
   const canStep2  = selectedCategory !== null && selectedSubcategory !== '';
+  // Step 3: must choose yes/no; if yes, must have picked location
+  const canStep3  = hasPhysicalStore === false || (hasPhysicalStore === true && storeLocation !== null);
   const canFinish = whatsapp.replace(/\D/g, '').length >= 10;
 
   const handleFinish = () => {
@@ -128,8 +140,31 @@ export function VendorRegistration({ onClose }: Props) {
       locality:     localityName,
       whatsapp:     '+91 ' + whatsapp.replace(/\D/g, '').slice(-10),
       description:  description.trim(),
+      ...(storeLocation && {
+        storeLocation: {
+          lat:      storeLocation.lat,
+          lng:      storeLocation.lng,
+          locality: storeLocation.locality,
+        },
+      }),
     });
-    setStep(4);
+    setStep(5);
+  };
+
+  const handleUseCurrentForStore = async () => {
+    setDetectingForStore(true);
+    const result = await requestUserLocation();
+    setDetectingForStore(false);
+    if (result.status === 'granted') {
+      const { getLocalityDisplayName, mockReverseGeocode } = await import('../utils/locationService');
+      const loc = mockReverseGeocode(result.lat, result.lng);
+      setStoreLocation({
+        lat:         result.lat,
+        lng:         result.lng,
+        locality:    loc,
+        displayName: getLocalityDisplayName(loc),
+      });
+    }
   };
 
   const slide = {
@@ -168,10 +203,10 @@ export function VendorRegistration({ onClose }: Props) {
           </button>
           <h1 style={{ fontSize: 17, fontWeight: 700, color: '#EBEBEB', margin: 0 }}>Register as Vendor</h1>
         </div>
-        {step < 4 && <StepIndicator current={step} />}
+        {step < 5 && <StepIndicator current={step} />}
       </div>
 
-      {/* ── Step content + sticky CTA shell ── */}
+      {/* ── Step content ── */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <AnimatePresence mode="wait">
 
@@ -180,12 +215,10 @@ export function VendorRegistration({ onClose }: Props) {
             <motion.div key="s1" {...slide} transition={{ duration: 0.2 }}
               style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
-              {/* Scrollable content */}
               <div className="scrollbar-none" style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
                 <h2 style={{ fontSize: 18, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 4px' }}>Basic Information</h2>
                 <p style={{ fontSize: 13, color: '#5C5C5C', marginBottom: 24 }}>Tell us about your business</p>
 
-                {/* Business name */}
                 <div style={{ marginBottom: 20 }}>
                   <FieldLabel required>Vendor / Business Name</FieldLabel>
                   <div style={{
@@ -208,7 +241,6 @@ export function VendorRegistration({ onClose }: Props) {
                   </div>
                 </div>
 
-                {/* Category (nav to step 2) */}
                 <div style={{ marginBottom: 20 }}>
                   <FieldLabel required>Category</FieldLabel>
                   <button
@@ -235,7 +267,6 @@ export function VendorRegistration({ onClose }: Props) {
                   </button>
                 </div>
 
-                {/* WhatsApp */}
                 <div style={{ marginBottom: 20 }}>
                   <FieldLabel required>WhatsApp Number</FieldLabel>
                   <div style={{
@@ -261,7 +292,6 @@ export function VendorRegistration({ onClose }: Props) {
                   <p style={{ fontSize: 11, color: '#3A3A3A', marginTop: 6, paddingLeft: 4 }}>Leads will contact you on WhatsApp</p>
                 </div>
 
-                {/* Go Live info card */}
                 <div style={{
                   borderRadius: 18, border: '1px solid rgba(0,200,150,0.15)',
                   background: 'rgba(0,200,150,0.04)', padding: '16px', marginBottom: 8,
@@ -287,7 +317,6 @@ export function VendorRegistration({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* Sticky CTA */}
               <div style={{ flexShrink: 0, padding: '12px 20px 24px', borderTop: '1px solid #1A1A1A' }}>
                 <CTAButton
                   label="Next: Category"
@@ -308,7 +337,6 @@ export function VendorRegistration({ onClose }: Props) {
                 <h2 style={{ fontSize: 18, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 4px' }}>Select Category</h2>
                 <p style={{ fontSize: 13, color: '#5C5C5C', marginBottom: 20 }}>Pick the best match for your service</p>
 
-                {/* Selected chip */}
                 {selectedCategory && selectedSubcategory && (
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 10,
@@ -323,13 +351,10 @@ export function VendorRegistration({ onClose }: Props) {
                     <button
                       onClick={() => { setSelectedCategory(null); setSelectedSubcategory(''); }}
                       style={{ fontSize: 11, fontWeight: 600, color: '#5C5C5C', background: 'none', border: 'none', cursor: 'pointer' }}
-                    >
-                      Change
-                    </button>
+                    >Change</button>
                   </div>
                 )}
 
-                {/* Category groups */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 8 }}>
                   {CATEGORY_GROUPS.filter(g => g.id !== 'emergency' && g.id !== 'society_services').map(group => (
                     <div key={group.id} style={{ borderRadius: 16, border: '1px solid #1A1A1A', overflow: 'hidden' }}>
@@ -344,15 +369,9 @@ export function VendorRegistration({ onClose }: Props) {
                         <span style={{ fontSize: 18 }}>{group.icon}</span>
                         <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#EBEBEB' }}>{group.label}</span>
                         {selectedCategory === group.id && selectedSubcategory && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
-                            background: 'rgba(0,200,150,0.12)', color: '#00C896',
-                          }}>✓</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 9999, background: 'rgba(0,200,150,0.12)', color: '#00C896' }}>✓</span>
                         )}
-                        {expandedCat === group.id
-                          ? <ChevronDown size={14} color="#5C5C5C" />
-                          : <ChevronRight size={14} color="#5C5C5C" />
-                        }
+                        {expandedCat === group.id ? <ChevronDown size={14} color="#5C5C5C" /> : <ChevronRight size={14} color="#5C5C5C" />}
                       </button>
                       <AnimatePresence>
                         {expandedCat === group.id && (
@@ -378,9 +397,7 @@ export function VendorRegistration({ onClose }: Props) {
                                       color:       sel ? '#00C896' : '#ADADAD',
                                       transition: 'all 0.15s',
                                     }}
-                                  >
-                                    {sub}
-                                  </button>
+                                  >{sub}</button>
                                 );
                               })}
                             </div>
@@ -392,31 +409,178 @@ export function VendorRegistration({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* Sticky CTA */}
               <div style={{ flexShrink: 0, padding: '12px 20px 24px', borderTop: '1px solid #1A1A1A', display: 'flex', gap: 10 }}>
-                <button
-                  onClick={() => setStep(1)}
-                  style={{
-                    flexShrink: 0, padding: '15px 18px', borderRadius: 16,
-                    fontSize: 14, fontWeight: 700, color: '#ADADAD',
-                    background: '#1A1A1A', border: 'none', cursor: 'pointer',
-                  }}
-                >← Back</button>
-                <CTAButton label="Next: Locality" onClick={() => setStep(3)} disabled={!canStep2} icon={<ChevronRight size={16} />} />
+                <button onClick={() => setStep(1)} style={{ flexShrink: 0, padding: '15px 18px', borderRadius: 16, fontSize: 14, fontWeight: 700, color: '#ADADAD', background: '#1A1A1A', border: 'none', cursor: 'pointer' }}>← Back</button>
+                <CTAButton label="Next: Location" onClick={() => setStep(3)} disabled={!canStep2} icon={<ChevronRight size={16} />} />
               </div>
             </motion.div>
           )}
 
-          {/* ─── Step 3: Locality ─── */}
+          {/* ─── Step 3: Store Location ─── */}
           {step === 3 && (
             <motion.div key="s3" {...slide} transition={{ duration: 0.2 }}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            >
+              <div className="scrollbar-none" style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 4px' }}>Physical Store</h2>
+                <p style={{ fontSize: 13, color: '#5C5C5C', marginBottom: 24 }}>Do you have a physical store or fixed location?</p>
+
+                {/* Yes / No choice */}
+                <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+                  {[
+                    { val: true,  label: 'Yes, I have a store', icon: '🏪' },
+                    { val: false, label: 'No, mobile / online only', icon: '📱' },
+                  ].map(opt => {
+                    const sel = hasPhysicalStore === opt.val;
+                    return (
+                      <button
+                        key={String(opt.val)}
+                        onClick={() => { setHasPhysicalStore(opt.val); if (!opt.val) setStoreLocation(null); }}
+                        style={{
+                          flex: 1, padding: '16px 12px', borderRadius: 16, textAlign: 'center',
+                          border: `1.5px solid ${sel ? 'rgba(0,200,150,0.5)' : '#2A2A2A'}`,
+                          background: sel ? 'rgba(0,200,150,0.08)' : '#161616',
+                          cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                      >
+                        <div style={{ fontSize: 24, marginBottom: 8 }}>{opt.icon}</div>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: sel ? '#00C896' : '#ADADAD', margin: 0, lineHeight: 1.4 }}>{opt.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* If YES — show store location options */}
+                {hasPhysicalStore === true && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {storeLocation ? (
+                      /* Already picked — show summary */
+                      <div style={{
+                        borderRadius: 16, border: '1px solid rgba(0,200,150,0.3)',
+                        background: 'rgba(0,200,150,0.06)', padding: '14px 16px', marginBottom: 16,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <MapPin size={16} color="#00C896" style={{ flexShrink: 0 }} />
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#EBEBEB', margin: 0 }}>{storeLocation.displayName}</p>
+                            <p style={{ fontSize: 11, color: '#5C5C5C', margin: '3px 0 0' }}>
+                              {storeLocation.lat.toFixed(4)}, {storeLocation.lng.toFixed(4)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setShowMapPicker(true)}
+                            style={{ fontSize: 12, fontWeight: 600, color: '#5C5C5C', background: 'none', border: 'none', cursor: 'pointer' }}
+                          >Edit</button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Not picked yet */
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={{ fontSize: 12, color: '#5C5C5C', marginBottom: 12 }}>
+                          Help customers find your store on the map.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {/* Use current location */}
+                          <motion.button
+                            whileTap={{ scale: 0.97 }}
+                            onClick={handleUseCurrentForStore}
+                            disabled={detectingForStore}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 12,
+                              padding: '14px 16px', borderRadius: 16, textAlign: 'left',
+                              background: '#161616',
+                              border: '1px solid #2A2A2A',
+                              cursor: detectingForStore ? 'wait' : 'pointer',
+                            }}
+                          >
+                            <div style={{
+                              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: 'rgba(77,158,255,0.12)',
+                              border: '1px solid rgba(77,158,255,0.25)',
+                            }}>
+                              {detectingForStore ? (
+                                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #2A2A2A', borderTopColor: '#4D9EFF', animation: 'spin 0.7s linear infinite' }} />
+                              ) : (
+                                <Navigation2 size={16} color="#4D9EFF" />
+                              )}
+                            </div>
+                            <div>
+                              <p style={{ fontSize: 13, fontWeight: 600, color: '#EBEBEB', margin: 0 }}>
+                                {detectingForStore ? 'Detecting location…' : 'Use my current location'}
+                              </p>
+                              <p style={{ fontSize: 11, color: '#5C5C5C', margin: '2px 0 0' }}>Quick GPS detection</p>
+                            </div>
+                          </motion.button>
+
+                          {/* Pin on map */}
+                          <motion.button
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => setShowMapPicker(true)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 12,
+                              padding: '14px 16px', borderRadius: 16, textAlign: 'left',
+                              background: '#161616',
+                              border: '1px solid #2A2A2A',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{
+                              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: 'rgba(0,200,150,0.1)',
+                              border: '1px solid rgba(0,200,150,0.25)',
+                            }}>
+                              <MapPin size={16} color="#00C896" />
+                            </div>
+                            <div>
+                              <p style={{ fontSize: 13, fontWeight: 600, color: '#EBEBEB', margin: 0 }}>Pin on map</p>
+                              <p style={{ fontSize: 11, color: '#5C5C5C', margin: '2px 0 0' }}>Tap or drag to set exact location</p>
+                            </div>
+                          </motion.button>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
+                {hasPhysicalStore === false && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    style={{
+                      padding: '14px 16px', borderRadius: 16,
+                      background: '#161616', border: '1px solid #2A2A2A',
+                    }}
+                  >
+                    <p style={{ fontSize: 12, color: '#5C5C5C', margin: 0, lineHeight: 1.6 }}>
+                      You'll still appear in your locality's listings. Customers can reach you via WhatsApp.
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+
+              <div style={{ flexShrink: 0, padding: '12px 20px 24px', borderTop: '1px solid #1A1A1A', display: 'flex', gap: 10 }}>
+                <button onClick={() => setStep(2)} style={{ flexShrink: 0, padding: '15px 18px', borderRadius: 16, fontSize: 14, fontWeight: 700, color: '#ADADAD', background: '#1A1A1A', border: 'none', cursor: 'pointer' }}>← Back</button>
+                <CTAButton label="Next: Locality" onClick={() => setStep(4)} disabled={!canStep3} icon={<ChevronRight size={16} />} />
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─── Step 4: Locality + Description ─── */}
+          {step === 4 && (
+            <motion.div key="s4" {...slide} transition={{ duration: 0.2 }}
               style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
               <div className="scrollbar-none" style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
                 <h2 style={{ fontSize: 18, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 4px' }}>Your Locality</h2>
                 <p style={{ fontSize: 13, color: '#5C5C5C', marginBottom: 20 }}>Where is your business located?</p>
 
-                {/* Detected locality */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '14px 16px', borderRadius: 16, marginBottom: 20,
@@ -424,12 +588,15 @@ export function VendorRegistration({ onClose }: Props) {
                 }}>
                   <MapPin size={16} color="#00C896" style={{ flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: '#EBEBEB', margin: 0 }}>Detected: {localityName}, Kolkata</p>
-                    <p style={{ fontSize: 11, color: '#5C5C5C', marginTop: 3 }}>You can change it below</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: '#EBEBEB', margin: 0 }}>
+                      {storeLocation ? storeLocation.displayName : localityName}, Kolkata
+                    </p>
+                    <p style={{ fontSize: 11, color: '#5C5C5C', marginTop: 3 }}>
+                      {storeLocation ? 'From pinned location — override below if needed' : 'You can change it below'}
+                    </p>
                   </div>
                 </div>
 
-                {/* Locality grid */}
                 <div style={{ marginBottom: 20 }}>
                   <FieldLabel>Select Locality</FieldLabel>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -447,15 +614,12 @@ export function VendorRegistration({ onClose }: Props) {
                             color:       sel ? '#00C896' : '#ADADAD',
                             transition: 'all 0.15s',
                           }}
-                        >
-                          {loc.name}
-                        </button>
+                        >{loc.name}</button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Description */}
                 <div style={{ marginBottom: 8 }}>
                   <FieldLabel>Description <span style={{ fontWeight: 400, textTransform: 'none', color: '#3A3A3A' }}>(optional)</span></FieldLabel>
                   <textarea
@@ -473,16 +637,8 @@ export function VendorRegistration({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* Sticky CTA */}
               <div style={{ flexShrink: 0, padding: '12px 20px 24px', borderTop: '1px solid #1A1A1A', display: 'flex', gap: 10 }}>
-                <button
-                  onClick={() => setStep(2)}
-                  style={{
-                    flexShrink: 0, padding: '15px 18px', borderRadius: 16,
-                    fontSize: 14, fontWeight: 700, color: '#ADADAD',
-                    background: '#1A1A1A', border: 'none', cursor: 'pointer',
-                  }}
-                >← Back</button>
+                <button onClick={() => setStep(3)} style={{ flexShrink: 0, padding: '15px 18px', borderRadius: 16, fontSize: 14, fontWeight: 700, color: '#ADADAD', background: '#1A1A1A', border: 'none', cursor: 'pointer' }}>← Back</button>
                 <CTAButton
                   label="Go Live"
                   onClick={handleFinish}
@@ -493,10 +649,10 @@ export function VendorRegistration({ onClose }: Props) {
             </motion.div>
           )}
 
-          {/* ─── Step 4: Done ─── */}
-          {step === 4 && (
+          {/* ─── Step 5: Done ─── */}
+          {step === 5 && (
             <motion.div
-              key="s4"
+              key="s5"
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.3, type: 'spring' }}
@@ -526,7 +682,17 @@ export function VendorRegistration({ onClose }: Props) {
                 Customers in {localityName} can find you.
               </p>
 
-              {/* Next steps card */}
+              {storeLocation && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20,
+                  padding: '10px 16px', borderRadius: 12,
+                  background: 'rgba(0,200,150,0.06)', border: '1px solid rgba(0,200,150,0.2)',
+                }}>
+                  <MapPin size={14} color="#00C896" />
+                  <span style={{ fontSize: 12, color: '#ADADAD' }}>Store pinned at {storeLocation.displayName}</span>
+                </div>
+              )}
+
               <div style={{
                 width: '100%', borderRadius: 18, border: '1px solid #1A1A1A', background: '#161616',
                 padding: '16px', textAlign: 'left', marginBottom: 20,
@@ -545,9 +711,7 @@ export function VendorRegistration({ onClose }: Props) {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 10, fontWeight: 700, marginTop: 1,
                       background: 'rgba(0,200,150,0.12)', color: '#00C896',
-                    }}>
-                      {i + 1}
-                    </div>
+                    }}>{i + 1}</div>
                     <p style={{ fontSize: 12, color: '#ADADAD', margin: 0, lineHeight: 1.5 }}>{tip}</p>
                   </div>
                 ))}
@@ -570,6 +734,22 @@ export function VendorRegistration({ onClose }: Props) {
 
         </AnimatePresence>
       </div>
+
+      {/* ── Map Location Picker modal (renders over this screen) ── */}
+      <AnimatePresence>
+        {showMapPicker && (
+          <MapLocationPicker
+            title="Pin Your Store"
+            subtitle="Tap the map or drag the pin to your store's exact location"
+            initialLocation={storeLocation ?? undefined}
+            onConfirm={(loc) => {
+              setStoreLocation(loc);
+              setShowMapPicker(false);
+            }}
+            onClose={() => setShowMapPicker(false)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

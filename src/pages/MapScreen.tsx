@@ -66,7 +66,8 @@ function MapResizer() {
 
 /* ── LocationLayer ────────────────────────────────────────────────────────────
    Renders the user location marker + accuracy circle and handles recenter.
-   Receives live coords from UserContext (updated by watchPosition).
+   V1 architecture: no watchPosition. Recenter is triggered externally via
+   recenterSignal after requestUserLocation() succeeds.
    ─────────────────────────────────────────────────────────────────────────── */
 function LocationLayer({
   coords,
@@ -77,21 +78,11 @@ function LocationLayer({
   accuracy:      number | null;
   recenterSignal: number;
 }) {
-  const map           = useMap();
-  const firstFixDone  = useRef(false);
-  const prevRecenter  = useRef(0);
+  const map          = useMap();
+  const prevRecenter = useRef(0);
   const fallback: [number, number] = [PATULI_FALLBACK_LAT, PATULI_FALLBACK_LNG];
 
-  /* Center map on FIRST valid GPS fix, then hands off to user */
-  useEffect(() => {
-    if (coords && !firstFixDone.current) {
-      firstFixDone.current = true;
-      console.log('[GeoHood Map] First fix — centering map', coords);
-      map.setView(coords, 16, { animate: true });
-    }
-  }, [coords, map]);
-
-  /* Manual recenter button tap */
+  /* Recenter: triggered after requestUserLocation() succeeds */
   useEffect(() => {
     if (recenterSignal > 0 && recenterSignal !== prevRecenter.current) {
       prevRecenter.current = recenterSignal;
@@ -189,17 +180,17 @@ export function MapScreen() {
     setLocLoading(true);
     await requestUserLocation();
     setLocLoading(false);
-    // LocationLayer auto-centers on first fix; also signal recenter
-    setTimeout(() => setRecenterSignal(s => s + 1), 300);
+    // Signal LocationLayer to recenter after the GPS fix lands in UserContext
+    setTimeout(() => setRecenterSignal(s => s + 1), 150);
   };
 
   /* ── Status badge config ── */
   const statusBadge = (() => {
-    if (locationStatus === 'requesting' || locLoading) {
+    if (locationStatus === 'detecting' || locLoading) {
       return { text: 'Detecting location…', color: '#5C5C5C', showSpinner: true };
     }
-    if (locationStatus === 'tracking') {
-      return { text: 'Live location', color: '#4D9EFF', showSpinner: false };
+    if (locationStatus === 'success' && hasLocation) {
+      return { text: 'Location detected', color: '#4D9EFF', showSpinner: false };
     }
     if (locationStatus === 'denied' || locationPermission === 'denied') {
       return { text: `Using ${selectedLocality || 'Patuli'}`, color: '#5C5C5C', showSpinner: false };
@@ -288,7 +279,7 @@ export function MapScreen() {
             maxZoom={19}
           />
 
-          {/* Live user location — updates as watchPosition fires */}
+          {/* User location dot — updated on each requestUserLocation() call */}
           <LocationLayer
             coords={userCoords}
             accuracy={userAccuracy}
@@ -313,7 +304,7 @@ export function MapScreen() {
             padding: '4px 10px', borderRadius: 9999,
             fontSize: 11, fontWeight: 500,
             color: statusBadge.color,
-            border: `1px solid ${locationStatus === 'tracking' ? 'rgba(77,158,255,0.3)' : '#242424'}`,
+            border: `1px solid ${locationStatus === 'success' && hasLocation ? 'rgba(77,158,255,0.3)' : '#242424'}`,
             background: 'rgba(16,16,16,0.92)',
             backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
           }}>
@@ -340,12 +331,8 @@ export function MapScreen() {
 
         {/* ── Recenter / request location button (bottom-right) ── */}
         <button
-          onClick={
-            locationPermission === 'unknown'
-              ? handleRequestLocation
-              : () => setRecenterSignal(s => s + 1)
-          }
-          disabled={locLoading || locationStatus === 'requesting'}
+          onClick={handleRequestLocation}
+          disabled={locLoading || locationStatus === 'detecting'}
           style={{
             position: 'absolute', bottom: 14, right: 12, zIndex: 410,
             width: 40, height: 40, borderRadius: '50%',
@@ -353,11 +340,11 @@ export function MapScreen() {
             background: hasLocation ? 'rgba(77,158,255,0.15)' : 'rgba(20,20,20,0.95)',
             border: `1px solid ${hasLocation ? 'rgba(77,158,255,0.35)' : '#242424'}`,
             backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-            cursor: (locLoading || locationStatus === 'requesting') ? 'wait' : 'pointer',
+            cursor: (locLoading || locationStatus === 'detecting') ? 'wait' : 'pointer',
             transition: 'all 0.2s',
           }}
         >
-          {(locLoading || locationStatus === 'requesting') ? (
+          {(locLoading || locationStatus === 'detecting') ? (
             <div style={{
               width: 16, height: 16, borderRadius: '50%',
               border: '2px solid #2A2A2A', borderTopColor: '#4D9EFF',
