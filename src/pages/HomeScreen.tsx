@@ -154,7 +154,7 @@ function SectionHeader({
    HomeScreen
    ═══════════════════════════════════════════════════════════════════════════ */
 export function HomeScreen() {
-  const { setActiveTab, setSelectedVendor } = useAppContext();
+  const { setActiveTab, setSelectedVendor, pushOverlay } = useAppContext();
   const { user }   = useUser();
   const [scrolled, setScrolled] = useState(false);
 
@@ -273,7 +273,7 @@ export function HomeScreen() {
                 <motion.button
                   key={cat.id}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setActiveTab('search')}
+                  onClick={() => pushOverlay({ type: 'category_results', categoryId: cat.id, label: cat.label })}
                   style={{
                     display: 'flex', flexDirection: 'column',
                     alignItems: 'center', gap: 6,

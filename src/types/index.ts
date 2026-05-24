@@ -1,3 +1,10 @@
+// ─── Overlay Navigation ──────────────────────────────────────────────────────
+
+export type OverlayScreen =
+  | { type: 'profile' }
+  | { type: 'category_results'; categoryId: string; label: string }
+  | { type: 'vendor_detail'; vendor: Vendor }
+
 // ─── Core Domain Types ──────────────────────────────────────────────────────
 
 export type VendorCategory =

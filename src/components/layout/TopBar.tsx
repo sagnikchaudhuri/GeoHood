@@ -10,8 +10,8 @@ interface TopBarProps {
 }
 
 export function TopBar({ scrolled = false }: TopBarProps) {
-  const { locality }         = useAppContext();
-  const { selectedLocality } = useUser();
+  const { locality, pushOverlay }    = useAppContext();
+  const { selectedLocality, notificationsEnabled } = useUser();
 
   const localityName = LOCALITIES.find(l => l.id === selectedLocality)?.name
     ?? locality.split(',')[0];
@@ -29,8 +29,9 @@ export function TopBar({ scrolled = false }: TopBarProps) {
         flexShrink:      0,
       }}
     >
-      {/* Hamburger */}
+      {/* Hamburger → opens Profile */}
       <button
+        onClick={() => pushOverlay({ type: 'profile' })}
         className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#1A1A1A] transition-colors flex-none"
         aria-label="Menu"
       >
@@ -65,25 +66,27 @@ export function TopBar({ scrolled = false }: TopBarProps) {
 
       {/* Bell */}
       <button
+        onClick={() => pushOverlay({ type: 'profile' })}
         className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-[#1A1A1A] transition-colors flex-none"
         aria-label="Notifications"
       >
-        <Bell size={18} color="#ADADAD" strokeWidth={1.8} />
-        {/* Notification badge */}
-        <span
-          className="absolute flex items-center justify-center text-[9px] font-bold text-white"
-          style={{
-            top:          3,
-            right:        3,
-            width:        16,
-            height:       16,
-            borderRadius: '50%',
-            background:   '#FF4D6A',
-            border:       '1.5px solid #0D0D0D',
-          }}
-        >
-          2
-        </span>
+        <Bell size={18} color={notificationsEnabled ? '#ADADAD' : '#3A3A3A'} strokeWidth={1.8} />
+        {notificationsEnabled && (
+          <span
+            className="absolute flex items-center justify-center text-[9px] font-bold text-white"
+            style={{
+              top:          3,
+              right:        3,
+              width:        16,
+              height:       16,
+              borderRadius: '50%',
+              background:   '#FF4D6A',
+              border:       '1.5px solid #0D0D0D',
+            }}
+          >
+            2
+          </span>
+        )}
       </button>
     </header>
   );

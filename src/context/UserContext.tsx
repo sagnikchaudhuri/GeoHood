@@ -17,36 +17,54 @@ function save<T>(key: string, val: T) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
+const GH_KEYS = [
+  'gh_onboarded','gh_user','gh_vendor','gh_leads',
+  'gh_residence','gh_seen_soc','gh_locality',
+  'gh_saved_vendors','gh_notifications',
+];
+
 // ─── Context shape ────────────────────────────────────────────────────────────
 
 interface UserContextValue {
   // Onboarding
-  hasOnboarded:    boolean;
+  hasOnboarded:       boolean;
   completeOnboarding: (profile: UserProfile) => void;
 
   // User profile
-  user:            UserProfile | null;
-  setUser:         (u: UserProfile) => void;
+  user:    UserProfile | null;
+  setUser: (u: UserProfile) => void;
 
   // Vendor
-  myVendor:        RegisteredVendor | null;
-  registerVendor:  (v: Omit<RegisteredVendor, 'id' | 'registeredAt' | 'isLive'>) => void;
-  setVendorLive:   (live: boolean) => void;
+  myVendor:       RegisteredVendor | null;
+  registerVendor: (v: Omit<RegisteredVendor, 'id' | 'registeredAt' | 'isLive'>) => void;
+  setVendorLive:  (live: boolean) => void;
 
   // Leads
-  leads:           Lead[];
-  trackLead:       (lead: Omit<Lead, 'id' | 'timestamp'>) => void;
-  myLeads:         Lead[];   // leads for my vendor only
+  leads:    Lead[];
+  trackLead:(lead: Omit<Lead, 'id' | 'timestamp'>) => void;
+  myLeads:  Lead[];
 
   // Residence
-  residence:       ResidenceRegistration | null;
-  setResidence:    (r: ResidenceRegistration) => void;
-  hasSeenSocietyOnboarding: boolean;
+  residence:                 ResidenceRegistration | null;
+  setResidence:              (r: ResidenceRegistration) => void;
+  hasSeenSocietyOnboarding:  boolean;
   markSocietyOnboardingSeen: () => void;
 
-  // Locality (selected)
-  selectedLocality: string;
+  // Locality
+  selectedLocality:    string;
   setSelectedLocality: (id: string) => void;
+
+  // Saved vendors
+  savedVendorIds:      string[];
+  toggleSavedVendor:   (vendorId: string) => void;
+  isVendorSaved:       (vendorId: string) => boolean;
+
+  // Notifications
+  notificationsEnabled:   boolean;
+  toggleNotifications:    () => void;
+
+  // Sign out
+  signOut: () => void;
 }
 
 const UserContext = createContext<UserContextValue | null>(null);
@@ -59,10 +77,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [myVendor, setMyVendor]                 = useState<RegisteredVendor | null>(() => load('gh_vendor', null));
   const [leads, setLeads]                       = useState<Lead[]>(() => load('gh_leads', []));
   const [residence, setResidenceState]          = useState<ResidenceRegistration | null>(() => load('gh_residence', null));
-  const [hasSeenSocietyOnboarding, setSeenSoc] = useState(() => load('gh_seen_soc', false));
+  const [hasSeenSocietyOnboarding, setSeenSoc]  = useState(() => load('gh_seen_soc', false));
   const [selectedLocality, setLocalityState]    = useState(() => load('gh_locality', 'patuli'));
+  const [savedVendorIds, setSavedVendorIds]     = useState<string[]>(() => load('gh_saved_vendors', []));
+  const [notificationsEnabled, setNotifications]= useState(() => load('gh_notifications', true));
 
-  // Persist whenever state changes
+  // Persist
   useEffect(() => { save('gh_onboarded', hasOnboarded); }, [hasOnboarded]);
   useEffect(() => { save('gh_user', user); }, [user]);
   useEffect(() => { save('gh_vendor', myVendor); }, [myVendor]);
@@ -70,25 +90,21 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { save('gh_residence', residence); }, [residence]);
   useEffect(() => { save('gh_seen_soc', hasSeenSocietyOnboarding); }, [hasSeenSocietyOnboarding]);
   useEffect(() => { save('gh_locality', selectedLocality); }, [selectedLocality]);
+  useEffect(() => { save('gh_saved_vendors', savedVendorIds); }, [savedVendorIds]);
+  useEffect(() => { save('gh_notifications', notificationsEnabled); }, [notificationsEnabled]);
 
   const completeOnboarding = useCallback((profile: UserProfile) => {
     setUserState(profile);
     setHasOnboarded(true);
   }, []);
 
-  const setUser = useCallback((u: UserProfile) => {
-    setUserState(u);
-  }, []);
+  const setUser = useCallback((u: UserProfile) => setUserState(u), []);
 
   const registerVendor = useCallback((v: Omit<RegisteredVendor, 'id' | 'registeredAt' | 'isLive'>) => {
     const vendor: RegisteredVendor = {
-      ...v,
-      id:           `vendor_${Date.now()}`,
-      registeredAt: Date.now(),
-      isLive:       false,
+      ...v, id: `vendor_${Date.now()}`, registeredAt: Date.now(), isLive: false,
     };
     setMyVendor(vendor);
-    // Also update user roles
     setUserState(prev => prev
       ? { ...prev, roles: [...new Set([...prev.roles, 'vendor' as const])] }
       : prev
@@ -105,7 +121,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       id:        `lead_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       timestamp: Date.now(),
     };
-    setLeads(prev => [newLead, ...prev].slice(0, 100)); // keep last 100
+    setLeads(prev => [newLead, ...prev].slice(0, 100));
   }, []);
 
   const setResidence = useCallback((r: ResidenceRegistration) => {
@@ -116,12 +132,39 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const markSocietyOnboardingSeen = useCallback(() => {
-    setSeenSoc(true);
+  const markSocietyOnboardingSeen = useCallback(() => setSeenSoc(true), []);
+
+  const setSelectedLocality = useCallback((id: string) => setLocalityState(id), []);
+
+  const toggleSavedVendor = useCallback((vendorId: string) => {
+    setSavedVendorIds(prev =>
+      prev.includes(vendorId)
+        ? prev.filter(id => id !== vendorId)
+        : [...prev, vendorId]
+    );
   }, []);
 
-  const setSelectedLocality = useCallback((id: string) => {
-    setLocalityState(id);
+  const isVendorSaved = useCallback((vendorId: string) => {
+    return savedVendorIds.includes(vendorId);
+  }, [savedVendorIds]);
+
+  const toggleNotifications = useCallback(() => {
+    setNotifications(prev => !prev);
+  }, []);
+
+  const signOut = useCallback(() => {
+    // Clear all persisted state
+    GH_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+    // Reset all state
+    setHasOnboarded(false);
+    setUserState(null);
+    setMyVendor(null);
+    setLeads([]);
+    setResidenceState(null);
+    setSeenSoc(false);
+    setLocalityState('patuli');
+    setSavedVendorIds([]);
+    setNotifications(true);
   }, []);
 
   const myLeads = myVendor
@@ -137,6 +180,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       residence, setResidence,
       hasSeenSocietyOnboarding, markSocietyOnboardingSeen,
       selectedLocality, setSelectedLocality,
+      savedVendorIds, toggleSavedVendor, isVendorSaved,
+      notificationsEnabled, toggleNotifications,
+      signOut,
     }}>
       {children}
     </UserContext.Provider>
