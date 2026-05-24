@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Home, ChevronDown, CheckCircle2, X } from 'lucide-react';
+import { Building2, Home, ChevronDown, CheckCircle2, X, ChevronRight } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { LOCALITIES } from '../data/localities';
 import { SocietyRole } from '../types';
@@ -12,10 +12,40 @@ interface Props {
 type Mode = 'choose' | 'society' | 'home' | 'done';
 
 const ROLES: { id: SocietyRole; label: string; desc: string }[] = [
-  { id: 'resident',     label: 'Resident',     desc: 'I live in this society'         },
-  { id: 'family_head',  label: 'Family Head',  desc: 'I manage the household account' },
-  { id: 'committee',    label: 'Committee',    desc: 'I\'m on the management committee' },
+  { id: 'resident',    label: 'Resident',    desc: 'I live in this society'          },
+  { id: 'family_head', label: 'Family Head', desc: 'I manage the household account'  },
+  { id: 'committee',   label: 'Committee',   desc: "I'm on the management committee" },
 ];
+
+/* ── Shared label above inputs ─────────────────────────────────────────── */
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{ fontSize: 11, fontWeight: 700, color: '#5C5C5C', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+      {children}
+    </p>
+  );
+}
+
+/* ── Text input ────────────────────────────────────────────────────────── */
+function TextInput({ placeholder, value, onChange, type = 'text' }: {
+  placeholder: string; value: string;
+  onChange: (v: string) => void; type?: string;
+}) {
+  return (
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        width: '100%', padding: '14px 16px', borderRadius: 16,
+        border: '1px solid #2A2A2A', background: '#161616',
+        outline: 'none', fontSize: 14, color: '#EBEBEB',
+        boxSizing: 'border-box',
+      }}
+    />
+  );
+}
 
 export function SocietyOnboarding({ onClose }: Props) {
   const { setResidence, selectedLocality } = useUser();
@@ -23,9 +53,9 @@ export function SocietyOnboarding({ onClose }: Props) {
   const [mode, setMode] = useState<Mode>('choose');
 
   // Society form
-  const [societyName, setSocietyName] = useState('');
-  const [flatNumber,  setFlatNumber]  = useState('');
-  const [role, setRole]               = useState<SocietyRole>('resident');
+  const [societyName,     setSocietyName]     = useState('');
+  const [flatNumber,      setFlatNumber]      = useState('');
+  const [role,            setRole]            = useState<SocietyRole>('resident');
   const [societyLocality, setSocietyLocality] = useState(selectedLocality);
 
   // Home form
@@ -59,7 +89,7 @@ export function SocietyOnboarding({ onClose }: Props) {
     setMode('done');
   };
 
-  const slideVariants = {
+  const slide = {
     initial: { x: 40, opacity: 0 },
     animate: { x: 0,  opacity: 1 },
     exit:    { x: -40, opacity: 0 },
@@ -70,27 +100,39 @@ export function SocietyOnboarding({ onClose }: Props) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="absolute inset-0 z-40 flex flex-col"
-      style={{ background: '#0D0D0D' }}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 40,
+        display: 'flex', flexDirection: 'column',
+        background: '#0D0D0D',
+      }}
     >
-      {/* Header */}
-      <div className="flex-none flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#1A1A1A]">
-        {mode !== 'choose' && mode !== 'done' && (
+      {/* ── Header ── */}
+      <div style={{
+        flexShrink: 0,
+        padding: 'calc(var(--safe-top) + 20px) 20px 16px',
+        borderBottom: '1px solid #1A1A1A',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        {(mode === 'society' || mode === 'home') && (
           <button
             onClick={() => setMode('choose')}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-[#1A1A1A]"
+            style={{
+              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#1A1A1A', border: 'none', cursor: 'pointer',
+            }}
           >
-            <X size={18} color="#ADADAD" />
+            <X size={16} color="#ADADAD" />
           </button>
         )}
-        <div className="flex-1">
-          <h1 className="text-base font-bold text-[#EBEBEB]">
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: 17, fontWeight: 700, color: '#EBEBEB', margin: 0 }}>
             {mode === 'choose'  && 'Register your residence'}
             {mode === 'society' && 'Society details'}
             {mode === 'home'    && 'Home details'}
-            {mode === 'done'    && 'You\'re registered!'}
+            {mode === 'done'    && "You're registered!"}
           </h1>
-          <p className="text-xs text-[#5C5C5C]">
+          <p style={{ fontSize: 12, color: '#5C5C5C', marginTop: 2 }}>
             {mode === 'choose'  && 'Connect with your local community'}
             {mode === 'society' && 'Tell us about your housing society'}
             {mode === 'home'    && 'Add your home address'}
@@ -98,287 +140,314 @@ export function SocietyOnboarding({ onClose }: Props) {
           </p>
         </div>
         {(mode === 'choose' || mode === 'done') && (
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full bg-[#1A1A1A]">
-            <X size={18} color="#ADADAD" />
+          <button
+            onClick={onClose}
+            style={{
+              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#1A1A1A', border: 'none', cursor: 'pointer',
+            }}
+          >
+            <X size={16} color="#ADADAD" />
           </button>
         )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+      {/* ── Content ── */}
+      <div className="scrollbar-none" style={{ flex: 1, overflowY: 'auto' }}>
         <AnimatePresence mode="wait">
 
-          {/* ── Choose mode ── */}
+          {/* ─── Choose mode ─── */}
           {mode === 'choose' && (
             <motion.div
               key="choose"
-              {...slideVariants}
+              {...slide}
               transition={{ duration: 0.22 }}
-              className="px-5 pt-8 pb-8 flex flex-col gap-4"
+              style={{ padding: '24px 20px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}
             >
-              <div className="text-center mb-4">
-                <p className="text-sm text-[#5C5C5C] leading-relaxed max-w-xs mx-auto">
-                  Register your home to access society notices, local alerts, and connect with neighbours.
-                </p>
-              </div>
+              <p style={{ fontSize: 13, color: '#5C5C5C', lineHeight: 1.6, textAlign: 'center', marginBottom: 8 }}>
+                Register your home to access society notices, local alerts, and connect with neighbours.
+              </p>
 
+              {/* Society option */}
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setMode('society')}
-                className="flex items-center gap-4 p-5 rounded-2xl border text-left transition-all"
-                style={{ background: '#161616', borderColor: '#2A2A2A' }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 16,
+                  padding: '18px 16px', borderRadius: 18,
+                  border: '1px solid rgba(0,200,150,0.18)',
+                  background: 'rgba(0,200,150,0.05)',
+                  textAlign: 'left', cursor: 'pointer', width: '100%',
+                }}
               >
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-none"
-                  style={{ background: 'rgba(0,200,150,0.1)' }}>
-                  <Building2 size={26} color="#00C896" />
+                <div style={{
+                  width: 52, height: 52, borderRadius: 16, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(0,200,150,0.12)', border: '1px solid rgba(0,200,150,0.2)',
+                }}>
+                  <Building2 size={24} color="#00C896" />
                 </div>
-                <div>
-                  <p className="text-base font-bold text-[#EBEBEB]">Register with Society</p>
-                  <p className="text-xs text-[#5C5C5C] mt-1 leading-relaxed">
-                    For apartment complexes and gated communities. Access committee notices and resident directory.
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: '#EBEBEB', margin: 0 }}>Register with Society</p>
+                  <p style={{ fontSize: 12, color: '#5C5C5C', marginTop: 4, lineHeight: 1.5 }}>
+                    For apartments & gated communities. Access committee notices and resident directory.
                   </p>
                 </div>
+                <ChevronRight size={16} color="#00C896" style={{ flexShrink: 0 }} />
               </motion.button>
 
+              {/* Home option */}
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setMode('home')}
-                className="flex items-center gap-4 p-5 rounded-2xl border text-left transition-all"
-                style={{ background: '#161616', borderColor: '#2A2A2A' }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 16,
+                  padding: '18px 16px', borderRadius: 18,
+                  border: '1px solid rgba(77,158,255,0.18)',
+                  background: 'rgba(77,158,255,0.05)',
+                  textAlign: 'left', cursor: 'pointer', width: '100%',
+                }}
               >
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-none"
-                  style={{ background: 'rgba(77,158,255,0.1)' }}>
-                  <Home size={26} color="#4D9EFF" />
+                <div style={{
+                  width: 52, height: 52, borderRadius: 16, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(77,158,255,0.12)', border: '1px solid rgba(77,158,255,0.2)',
+                }}>
+                  <Home size={24} color="#4D9EFF" />
                 </div>
-                <div>
-                  <p className="text-base font-bold text-[#EBEBEB]">Register My Home</p>
-                  <p className="text-xs text-[#5C5C5C] mt-1 leading-relaxed">
-                    For standalone houses and independent residences. Get hyperlocal alerts for your area.
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: '#EBEBEB', margin: 0 }}>Register My Home</p>
+                  <p style={{ fontSize: 12, color: '#5C5C5C', marginTop: 4, lineHeight: 1.5 }}>
+                    For standalone houses & independent residences. Get hyperlocal alerts for your area.
                   </p>
                 </div>
+                <ChevronRight size={16} color="#4D9EFF" style={{ flexShrink: 0 }} />
               </motion.button>
 
-              <button onClick={onClose} className="text-center text-xs text-[#3A3A3A] mt-2">
+              <button onClick={onClose} style={{ textAlign: 'center', fontSize: 12, color: '#3A3A3A', marginTop: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
                 Skip for now
               </button>
             </motion.div>
           )}
 
-          {/* ── Society form ── */}
+          {/* ─── Society form ─── */}
           {mode === 'society' && (
             <motion.div
               key="society"
-              {...slideVariants}
+              {...slide}
               transition={{ duration: 0.22 }}
-              className="px-5 pt-6 pb-8 flex flex-col gap-5"
+              style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
             >
-              {/* Society name */}
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Society / Complex Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Patuli Housing Estate"
-                  value={societyName}
-                  onChange={e => setSocietyName(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616] outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A]"
-                />
-              </div>
-
-              {/* Flat number */}
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Flat / Unit Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. C-204 or Tower B, 12th Floor"
-                  value={flatNumber}
-                  onChange={e => setFlatNumber(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616] outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A]"
-                />
-              </div>
-
-              {/* Role picker */}
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Your Role
-                </label>
-                <div className="relative">
-                  <button
-                    onClick={() => setRoleOpen(!roleOpen)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616] text-left"
-                  >
-                    <span className="flex-1 text-sm text-[#EBEBEB]">
-                      {ROLES.find(r => r.id === role)?.label}
-                    </span>
-                    <ChevronDown size={16} color="#5C5C5C"
-                      style={{ transform: roleOpen ? 'rotate(180deg)' : 'none', transition: '0.2s' }}
-                    />
-                  </button>
-
-                  <AnimatePresence>
-                    {roleOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden mt-1 rounded-2xl border border-[#2A2A2A] bg-[#161616]"
-                      >
-                        {ROLES.map(r => (
-                          <button
-                            key={r.id}
-                            onClick={() => { setRole(r.id); setRoleOpen(false); }}
-                            className="w-full flex items-center justify-between px-4 py-3 text-left border-b border-[#1E1E1E] last:border-0"
-                          >
-                            <div>
-                              <p className="text-sm font-semibold text-[#EBEBEB]">{r.label}</p>
-                              <p className="text-xs text-[#5C5C5C]">{r.desc}</p>
-                            </div>
-                            {role === r.id && <CheckCircle2 size={16} color="#00C896" />}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+              {/* Scrollable fields */}
+              <div style={{ flex: 1, padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div>
+                  <FieldLabel>Society / Complex Name *</FieldLabel>
+                  <TextInput placeholder="e.g. Patuli Housing Estate" value={societyName} onChange={setSocietyName} />
                 </div>
-              </div>
+                <div>
+                  <FieldLabel>Flat / Unit Number *</FieldLabel>
+                  <TextInput placeholder="e.g. C-204 or Tower B, 12th Floor" value={flatNumber} onChange={setFlatNumber} />
+                </div>
 
-              {/* Locality */}
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Locality
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {LOCALITIES.slice(0, 9).map(loc => (
+                {/* Role picker */}
+                <div>
+                  <FieldLabel>Your Role</FieldLabel>
+                  <div style={{ position: 'relative' }}>
                     <button
-                      key={loc.id}
-                      onClick={() => setSocietyLocality(loc.id)}
-                      className="py-2 px-3 rounded-xl text-xs font-medium border transition-all"
+                      onClick={() => setRoleOpen(!roleOpen)}
                       style={{
-                        background:  societyLocality === loc.id ? 'rgba(0,200,150,0.12)' : '#161616',
-                        borderColor: societyLocality === loc.id ? 'rgba(0,200,150,0.35)' : '#1E1E1E',
-                        color:       societyLocality === loc.id ? '#00C896' : '#ADADAD',
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '14px 16px', borderRadius: 16,
+                        border: '1px solid #2A2A2A', background: '#161616',
+                        cursor: 'pointer', textAlign: 'left',
                       }}
                     >
-                      {loc.name}
+                      <span style={{ flex: 1, fontSize: 14, color: '#EBEBEB' }}>
+                        {ROLES.find(r => r.id === role)?.label}
+                      </span>
+                      <ChevronDown size={15} color="#5C5C5C"
+                        style={{ transform: roleOpen ? 'rotate(180deg)' : 'none', transition: '0.2s', flexShrink: 0 }}
+                      />
                     </button>
-                  ))}
+                    <AnimatePresence>
+                      {roleOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          style={{
+                            overflow: 'hidden', marginTop: 4, borderRadius: 16,
+                            border: '1px solid #2A2A2A', background: '#161616',
+                          }}
+                        >
+                          {ROLES.map(r => (
+                            <button
+                              key={r.id}
+                              onClick={() => { setRole(r.id); setRoleOpen(false); }}
+                              style={{
+                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '12px 16px', textAlign: 'left', cursor: 'pointer',
+                                borderBottom: '1px solid #1E1E1E', background: 'none',
+                              }}
+                            >
+                              <div>
+                                <p style={{ fontSize: 13, fontWeight: 600, color: '#EBEBEB', margin: 0 }}>{r.label}</p>
+                                <p style={{ fontSize: 11, color: '#5C5C5C', marginTop: 2 }}>{r.desc}</p>
+                              </div>
+                              {role === r.id && <CheckCircle2 size={16} color="#00C896" />}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                {/* Locality */}
+                <div>
+                  <FieldLabel>Locality</FieldLabel>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                    {LOCALITIES.slice(0, 9).map(loc => (
+                      <button
+                        key={loc.id}
+                        onClick={() => setSocietyLocality(loc.id)}
+                        style={{
+                          padding: '10px 8px', borderRadius: 12, fontSize: 11, fontWeight: 500,
+                          textAlign: 'center', cursor: 'pointer',
+                          background:  societyLocality === loc.id ? 'rgba(0,200,150,0.12)' : '#161616',
+                          border:      `1px solid ${societyLocality === loc.id ? 'rgba(0,200,150,0.35)' : '#1E1E1E'}`,
+                          color:       societyLocality === loc.id ? '#00C896' : '#ADADAD',
+                        }}
+                      >
+                        {loc.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={handleSaveSociety}
-                disabled={!canSaveSociety}
-                className="py-3.5 rounded-2xl font-bold text-sm mt-2"
-                style={{
-                  background: canSaveSociety ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
-                  color: canSaveSociety ? 'white' : '#3A3A3A',
-                }}
-              >
-                Register with Society
-              </motion.button>
+              {/* Sticky CTA */}
+              <div style={{ flexShrink: 0, padding: '16px 20px 24px', borderTop: '1px solid #1A1A1A', marginTop: 20 }}>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleSaveSociety}
+                  disabled={!canSaveSociety}
+                  style={{
+                    width: '100%', padding: '15px', borderRadius: 16,
+                    fontSize: 14, fontWeight: 700,
+                    background: canSaveSociety ? 'linear-gradient(135deg, #00C896, #0aa87a)' : '#1A1A1A',
+                    color: canSaveSociety ? 'white' : '#3A3A3A',
+                    border: 'none', cursor: canSaveSociety ? 'pointer' : 'default',
+                  }}
+                >
+                  Register with Society
+                </motion.button>
+              </div>
             </motion.div>
           )}
 
-          {/* ── Home form ── */}
+          {/* ─── Home form ─── */}
           {mode === 'home' && (
             <motion.div
               key="home"
-              {...slideVariants}
+              {...slide}
               transition={{ duration: 0.22 }}
-              className="px-5 pt-6 pb-8 flex flex-col gap-5"
+              style={{ display: 'flex', flexDirection: 'column' }}
             >
-              {/* Home label */}
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Home Label
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. My Home, Family House"
-                  value={homeLabel}
-                  onChange={e => setHomeLabel(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616] outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A]"
-                />
-              </div>
-
-              {/* Address */}
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Address
-                </label>
-                <textarea
-                  placeholder="e.g. 12 Lake View Road, near Patuli Lake"
-                  value={homeAddress}
-                  onChange={e => setHomeAddress(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-[#2A2A2A] bg-[#161616] outline-none text-sm text-[#EBEBEB] placeholder:text-[#3A3A3A] resize-none"
-                />
-              </div>
-
-              {/* Locality */}
-              <div>
-                <label className="text-xs font-semibold text-[#5C5C5C] uppercase tracking-wider mb-2 block">
-                  Locality
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {LOCALITIES.slice(0, 9).map(loc => (
-                    <button
-                      key={loc.id}
-                      onClick={() => setHomeLocality(loc.id)}
-                      className="py-2 px-3 rounded-xl text-xs font-medium border transition-all"
-                      style={{
-                        background:  homeLocality === loc.id ? 'rgba(77,158,255,0.12)' : '#161616',
-                        borderColor: homeLocality === loc.id ? 'rgba(77,158,255,0.35)' : '#1E1E1E',
-                        color:       homeLocality === loc.id ? '#4D9EFF' : '#ADADAD',
-                      }}
-                    >
-                      {loc.name}
-                    </button>
-                  ))}
+              {/* Scrollable fields */}
+              <div style={{ flex: 1, padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div>
+                  <FieldLabel>Home Label *</FieldLabel>
+                  <TextInput placeholder="e.g. My Home, Family House" value={homeLabel} onChange={setHomeLabel} />
+                </div>
+                <div>
+                  <FieldLabel>Address *</FieldLabel>
+                  <textarea
+                    placeholder="e.g. 12 Lake View Road, near Patuli Lake"
+                    value={homeAddress}
+                    onChange={e => setHomeAddress(e.target.value)}
+                    rows={3}
+                    style={{
+                      width: '100%', padding: '14px 16px', borderRadius: 16,
+                      border: '1px solid #2A2A2A', background: '#161616',
+                      outline: 'none', fontSize: 14, color: '#EBEBEB',
+                      resize: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Locality</FieldLabel>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                    {LOCALITIES.slice(0, 9).map(loc => (
+                      <button
+                        key={loc.id}
+                        onClick={() => setHomeLocality(loc.id)}
+                        style={{
+                          padding: '10px 8px', borderRadius: 12, fontSize: 11, fontWeight: 500,
+                          textAlign: 'center', cursor: 'pointer',
+                          background:  homeLocality === loc.id ? 'rgba(77,158,255,0.12)' : '#161616',
+                          border:      `1px solid ${homeLocality === loc.id ? 'rgba(77,158,255,0.35)' : '#1E1E1E'}`,
+                          color:       homeLocality === loc.id ? '#4D9EFF' : '#ADADAD',
+                        }}
+                      >
+                        {loc.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={handleSaveHome}
-                disabled={!canSaveHome}
-                className="py-3.5 rounded-2xl font-bold text-sm mt-2"
-                style={{
-                  background: canSaveHome ? 'linear-gradient(135deg, #4D9EFF, #1666E8)' : '#1A1A1A',
-                  color: canSaveHome ? 'white' : '#3A3A3A',
-                }}
-              >
-                Register My Home
-              </motion.button>
+              {/* Sticky CTA */}
+              <div style={{ flexShrink: 0, padding: '16px 20px 24px', borderTop: '1px solid #1A1A1A', marginTop: 20 }}>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleSaveHome}
+                  disabled={!canSaveHome}
+                  style={{
+                    width: '100%', padding: '15px', borderRadius: 16,
+                    fontSize: 14, fontWeight: 700,
+                    background: canSaveHome ? 'linear-gradient(135deg, #4D9EFF, #1666E8)' : '#1A1A1A',
+                    color: canSaveHome ? 'white' : '#3A3A3A',
+                    border: 'none', cursor: canSaveHome ? 'pointer' : 'default',
+                  }}
+                >
+                  Register My Home
+                </motion.button>
+              </div>
             </motion.div>
           )}
 
-          {/* ── Done ── */}
+          {/* ─── Done ─── */}
           {mode === 'done' && (
             <motion.div
               key="done"
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.3, type: 'spring' }}
-              className="px-5 pt-16 pb-8 flex flex-col items-center gap-5 text-center"
+              style={{
+                padding: '56px 20px 32px',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, textAlign: 'center',
+              }}
             >
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                className="w-20 h-20 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(0,200,150,0.12)' }}
+                style={{
+                  width: 80, height: 80, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(0,200,150,0.12)', border: '1px solid rgba(0,200,150,0.2)',
+                }}
               >
                 <CheckCircle2 size={40} color="#00C896" />
               </motion.div>
 
               <div>
-                <h2 className="text-2xl font-bold text-[#EBEBEB]">Welcome home!</h2>
-                <p className="text-sm text-[#5C5C5C] mt-2 leading-relaxed max-w-xs">
+                <h2 style={{ fontSize: 26, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: 0 }}>
+                  Welcome home!
+                </h2>
+                <p style={{ fontSize: 13, color: '#5C5C5C', marginTop: 10, lineHeight: 1.6, maxWidth: 280 }}>
                   You're now connected to your community. Receive local notices, alerts, and stay informed about what's happening nearby.
                 </p>
               </div>
@@ -386,8 +455,13 @@ export function SocietyOnboarding({ onClose }: Props) {
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={onClose}
-                className="w-full py-3.5 rounded-2xl font-bold text-white text-sm"
-                style={{ background: 'linear-gradient(135deg, #00C896, #0aa87a)' }}
+                style={{
+                  width: '100%', maxWidth: 320,
+                  padding: '15px', borderRadius: 16,
+                  fontSize: 14, fontWeight: 700, color: 'white',
+                  background: 'linear-gradient(135deg, #00C896, #0aa87a)',
+                  border: 'none', cursor: 'pointer',
+                }}
               >
                 View Society Board →
               </motion.button>

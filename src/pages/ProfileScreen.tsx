@@ -33,63 +33,74 @@ export function ProfileScreen({ onClose }: Props) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 24 }}
       transition={{ duration: 0.22, ease: [0.32, 0, 0.18, 1] }}
-      className="absolute inset-0 flex flex-col bg-[#0D0D0D]"
-      style={{ zIndex: 60 }}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 60,
+        display: 'flex', flexDirection: 'column',
+        background: '#0D0D0D',
+      }}
     >
-      {/* Header bar */}
-      <div
-        className="flex-none flex items-center justify-between px-5 pb-4 border-b border-[#1A1A1A]"
-        style={{ paddingTop: 'calc(var(--safe-top) + 20px)' }}
-      >
+      {/* ── Header ── */}
+      <div style={{
+        flexShrink: 0,
+        padding: 'calc(var(--safe-top) + 20px) 20px 16px',
+        borderBottom: '1px solid #1A1A1A',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
         <div>
-          <h1 className="text-base font-bold text-[#EBEBEB]">Profile</h1>
-          <p className="text-xs text-[#5C5C5C]">{localityName} · GeoHood Member</p>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: 0 }}>Profile</h1>
+          <p style={{ fontSize: 12, color: '#5C5C5C', marginTop: 3 }}>{localityName} · GeoHood Member</p>
         </div>
         <button
           onClick={onClose}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-[#1A1A1A]"
+          style={{
+            width: 36, height: 36, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#1A1A1A', border: 'none', cursor: 'pointer',
+          }}
         >
-          <X size={17} color="#ADADAD" />
+          <X size={16} color="#ADADAD" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+      {/* ── Body ── */}
+      <div className="scrollbar-none" style={{ flex: 1, overflowY: 'auto' }}>
+
         {/* Avatar + name */}
-        <div className="flex flex-col items-center px-5 pt-8 pb-6">
-          <div
-            className="w-20 h-20 rounded-full flex items-center justify-center mb-3 border-2"
-            style={{
-              background:   initials ? 'rgba(0,200,150,0.1)' : '#161616',
-              borderColor:  initials ? 'rgba(0,200,150,0.25)' : '#2A2A2A',
-            }}
-          >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 20px 20px' }}>
+          <div style={{
+            width: 80, height: 80, borderRadius: '50%', marginBottom: 14,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: initials ? 'rgba(0,200,150,0.1)' : '#161616',
+            border: `2px solid ${initials ? 'rgba(0,200,150,0.25)' : '#2A2A2A'}`,
+          }}>
             {initials
-              ? <span className="text-2xl font-bold" style={{ color: '#00C896' }}>{initials}</span>
+              ? <span style={{ fontSize: 26, fontWeight: 800, color: '#00C896' }}>{initials}</span>
               : <User size={32} color="#3A3A3A" />
             }
           </div>
-          <h2 className="text-lg font-bold text-[#EBEBEB]">
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#EBEBEB', margin: 0, letterSpacing: '-0.02em' }}>
             {user?.name ?? 'GeoHood User'}
           </h2>
           {user?.phone && (
-            <p className="text-xs text-[#5C5C5C] mt-0.5">+91 {user.phone}</p>
+            <p style={{ fontSize: 12, color: '#5C5C5C', marginTop: 4 }}>+91 {user.phone}</p>
           )}
-          <p className="text-xs text-[#5C5C5C] mt-0.5 flex items-center gap-1">
+          <p style={{ fontSize: 12, color: '#5C5C5C', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
             <MapPin size={11} color="#5C5C5C" />
             {localityName}, Kolkata 700094
           </p>
 
           {/* Role chips */}
           {user?.roles && user.roles.length > 0 && (
-            <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
               {user.roles.map(role => (
                 <span
                   key={role}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider"
                   style={{
+                    padding: '4px 10px', borderRadius: 9999, fontSize: 10, fontWeight: 700,
+                    textTransform: 'uppercase', letterSpacing: '0.04em',
                     background:  role === 'vendor' ? 'rgba(0,200,150,0.1)' : 'rgba(77,158,255,0.1)',
                     color:       role === 'vendor' ? '#00C896' : '#4D9EFF',
-                    border:      role === 'vendor' ? '1px solid rgba(0,200,150,0.2)' : '1px solid rgba(77,158,255,0.2)',
+                    border:      role === 'vendor' ? '1px solid rgba(0,200,150,0.22)' : '1px solid rgba(77,158,255,0.22)',
                   }}
                 >
                   {role === 'society_member' ? 'Society' : role}
@@ -100,23 +111,29 @@ export function ProfileScreen({ onClose }: Props) {
         </div>
 
         {/* Stats */}
-        <div className="px-5 pb-5">
-          <div className="rounded-2xl border border-[#1E1E1E] bg-[#161616] p-4 grid grid-cols-3 divide-x divide-[#1E1E1E]">
+        <div style={{ padding: '0 20px 20px' }}>
+          <div style={{
+            borderRadius: 18, border: '1px solid #1E1E1E', background: '#111111',
+            padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+          }}>
             {[
-              { value: '4',  label: 'Saved'   },
-              { value: '12', label: 'Visited' },
-              { value: '87', label: 'Trust'   },
-            ].map(s => (
-              <div key={s.label} className="flex flex-col items-center gap-0.5">
-                <span className="text-xl font-bold text-[#EBEBEB]">{s.value}</span>
-                <span className="text-[11px] text-[#5C5C5C] font-medium">{s.label}</span>
+              { value: '4',  label: 'Saved',   color: '#00C896' },
+              { value: '12', label: 'Visited',  color: '#4D9EFF' },
+              { value: '87', label: 'Trust',    color: '#A855F7' },
+            ].map((s, i) => (
+              <div key={s.label} style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                borderLeft: i > 0 ? '1px solid #1E1E1E' : 'none',
+              }}>
+                <span style={{ fontSize: 24, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</span>
+                <span style={{ fontSize: 11, color: '#5C5C5C', fontWeight: 500 }}>{s.label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Menu */}
-        <div className="px-5 pb-6 flex flex-col gap-1">
+        {/* Menu items */}
+        <div style={{ padding: '0 20px 8px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {menuItems.map((item, i) => {
             const Icon = item.icon;
             return (
@@ -125,28 +142,44 @@ export function ProfileScreen({ onClose }: Props) {
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.04 }}
-                className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-[#1E1E1E] bg-[#161616] hover:border-[#2A2A2A] hover:bg-[#1A1A1A] transition-all text-left"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 14px', borderRadius: 16,
+                  border: '1px solid #1A1A1A', background: '#161616',
+                  textAlign: 'left', cursor: 'pointer', width: '100%',
+                }}
               >
-                <div className="w-9 h-9 flex-none flex items-center justify-center rounded-xl bg-[#1A1A1A]">
-                  <Icon size={17} color="#ADADAD" strokeWidth={1.8} />
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: '#1A1A1A',
+                }}>
+                  <Icon size={16} color="#ADADAD" strokeWidth={1.8} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium text-[#EBEBEB]">{item.label}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#EBEBEB', display: 'block' }}>{item.label}</span>
                   {item.sub && (
-                    <span className="text-xs text-[#5C5C5C] block mt-0.5">{item.sub}</span>
+                    <span style={{ fontSize: 11, color: '#5C5C5C', display: 'block', marginTop: 2 }}>{item.sub}</span>
                   )}
                 </div>
-                <ChevronRight size={16} color="#3A3A3A" />
+                <ChevronRight size={15} color="#2A2A2A" style={{ flexShrink: 0 }} />
               </motion.button>
             );
           })}
+        </div>
 
-          <button className="w-full mt-3 flex items-center justify-center gap-2 py-3 rounded-xl border border-[#1E1E1E] bg-[#161616] text-[#5C5C5C] text-sm hover:text-[#FF4D6A] hover:border-[rgba(255,77,106,0.2)] transition-colors">
-            <LogOut size={16} />
+        {/* Sign out + version */}
+        <div style={{ padding: '8px 20px 32px' }}>
+          <button style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '13px', borderRadius: 16, fontSize: 13, fontWeight: 600,
+            border: '1px solid #1A1A1A', background: '#161616',
+            color: '#5C5C5C', cursor: 'pointer',
+          }}>
+            <LogOut size={15} />
             Sign Out
           </button>
-
-          <p className="text-center text-[11px] text-[#3A3A3A] mt-6">
+          <p style={{ textAlign: 'center', fontSize: 11, color: '#2A2A2A', marginTop: 16 }}>
             GeoHood V1 · {localityName}, Kolkata
           </p>
         </div>

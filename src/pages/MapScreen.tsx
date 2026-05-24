@@ -259,24 +259,21 @@ export function MapScreen() {
       <div
         style={{
           flexShrink:   0,
-          background:   '#0E0E0E',
+          background:   '#0D0D0D',
           borderTop:    '1px solid #1A1A1A',
         }}
       >
-        <p
-          style={{
-            fontSize: 10, fontWeight: 700, color: '#484848',
-            letterSpacing: '0.1em', textTransform: 'uppercase',
-            padding: '10px 16px 6px',
-          }}
-        >
-          Nearby Vendors
-        </p>
+        <div style={{ padding: '10px 16px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#EBEBEB', letterSpacing: '-0.01em' }}>
+            Nearby Vendors
+          </p>
+          <span style={{ fontSize: 10, fontWeight: 600, color: '#3A3A3A' }}>{vendors.length} shown</span>
+        </div>
         <div
           className="scrollbar-none"
           style={{
             display: 'flex', gap: 8,
-            paddingLeft: 14, paddingRight: 14,
+            paddingLeft: 16, paddingRight: 16,
             overflowX: 'auto', paddingBottom: 12,
           }}
         >
@@ -284,32 +281,46 @@ export function MapScreen() {
             const cat    = CATEGORY_MAP[v.category];
             const status = getOpenStatus(v.openTime, v.closeTime);
             const isPrev = previewVendor?.id === v.id;
+            const initials = v.name.split(' ').filter(Boolean).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
             return (
               <button
                 key={v.id}
                 onClick={() => setPreviewVendor(isPrev ? null : v)}
                 style={{
-                  flexShrink: 0, width: 132,
+                  flexShrink: 0, width: 140,
                   display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                  padding: 10, borderRadius: 14, textAlign: 'left',
+                  padding: '10px 12px 12px', borderRadius: 16, textAlign: 'left',
                   background: isPrev ? (cat?.bgColor ?? 'rgba(136,136,136,0.1)') : '#161616',
-                  border: `1px solid ${isPrev ? (cat?.color ?? '#888') + '40' : '#1E1E1E'}`,
+                  border: `1px solid ${isPrev ? (cat?.color ?? '#888') + '40' : '#1A1A1A'}`,
                   transition: 'all 0.15s',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, width: '100%' }}>
-                  <span style={{ fontSize: 15 }}>{cat?.icon ?? '📦'}</span>
+                {/* Icon + subcategory */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, width: '100%' }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: `${cat?.color ?? '#888'}1a`,
+                    fontSize: 9, fontWeight: 700, color: cat?.color ?? '#ADADAD',
+                  }}>
+                    {initials}
+                  </div>
                   <span style={{ fontSize: 10, color: '#5C5C5C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                     {v.subcategory}
                   </span>
                 </div>
-                <p style={{ fontSize: 12, fontWeight: 600, color: '#EBEBEB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', margin: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#EBEBEB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', margin: 0 }}>
                   {v.name}
                 </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                  <span style={{ fontSize: 10, color: '#5C5C5C' }}>{formatDistance(v.distance)}</span>
-                  <span style={{ color: '#2A2A2A', fontSize: 10 }}>·</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: status.isOpen ? '#00C896' : '#484848' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 5 }}>
+                  <span style={{ fontSize: 9, color: '#5C5C5C' }}>{formatDistance(v.distance)}</span>
+                  <span style={{ color: '#252525', fontSize: 9 }}>·</span>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999,
+                    background: status.isOpen ? 'rgba(0,200,150,0.1)' : 'rgba(72,72,72,0.1)',
+                    color: status.isOpen ? '#00C896' : '#5C5C5C',
+                    border: `1px solid ${status.isOpen ? 'rgba(0,200,150,0.22)' : '#222'}`,
+                  }}>
                     {status.isOpen ? 'Open' : 'Closed'}
                   </span>
                 </div>
