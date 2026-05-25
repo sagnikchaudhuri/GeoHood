@@ -1,38 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, MapPin, ArrowRight, RefreshCw, ChevronLeft, User } from 'lucide-react';
+import { Phone, MapPin, ArrowRight, RefreshCw, ChevronLeft, User, Loader } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { LOCALITIES, DEFAULT_LOCALITY } from '../data/localities';
 import { UserProfile } from '../types';
+import { supabase, SUPABASE_CONFIGURED } from '../lib/supabase';
 
 type Step = 'welcome' | 'phone' | 'otp' | 'location' | 'name' | 'loading';
 
-const MOCK_OTP = '1234';
+/* 6-digit OTP — matches Supabase standard.
+   When Supabase phone auth is not configured the hint shows this code. */
+const MOCK_OTP       = '123456';
 const RESEND_SECONDS = 30;
+const OTP_LENGTH     = 6;
 
-/* ── Shared CTA button (modular/premium) ──────────────────────────────────── */
+/* ── Shared CTA button ───────────────────────────────────────────────────── */
 function PrimaryCTA({
-  label,
-  onClick,
-  disabled = false,
-  icon,
+  label, onClick, disabled = false, loading = false, icon,
 }: {
-  label: string;
-  onClick: () => void;
+  label:    string;
+  onClick:  () => void;
   disabled?: boolean;
-  icon?: React.ReactNode;
+  loading?:  boolean;
+  icon?:     React.ReactNode;
 }) {
   return (
     <motion.button
-      whileTap={disabled ? {} : { scale: 0.97 }}
-      onClick={disabled ? undefined : onClick}
+      whileTap={disabled || loading ? {} : { scale: 0.97 }}
+      onClick={disabled || loading ? undefined : onClick}
       style={{
-        width: '100%',
-        padding: '17px 24px',
-        borderRadius: 20,
+        width: '100%', padding: '17px 24px', borderRadius: 20,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em',
-        cursor: disabled ? 'not-allowed' : 'pointer',
+        cursor: disabled || loading ? 'not-allowed' : 'pointer',
         border: disabled
           ? '1px solid #222'
           : '1px solid rgba(0,200,150,0.22)',
@@ -46,13 +46,15 @@ function PrimaryCTA({
         transition: 'all 0.2s',
       }}
     >
-      {label}
-      {icon}
+      {loading
+        ? <Loader size={17} style={{ animation: 'spin 1s linear infinite' }} />
+        : <>{label}{icon}</>
+      }
     </motion.button>
   );
 }
 
-/* ── Step progress dots ───────────────────────────────────────────────────── */
+/* ── Step progress dots ──────────────────────────────────────────────────── */
 function StepDots({ current }: { current: Step }) {
   const steps: Step[] = ['phone', 'otp', 'location', 'name'];
   return (
@@ -62,27 +64,24 @@ function StepDots({ current }: { current: Step }) {
       paddingTop: 20, flexShrink: 0,
     }}>
       {steps.map(s => {
-        const idx = steps.indexOf(s);
+        const idx    = steps.indexOf(s);
         const curIdx = steps.indexOf(current);
         const active = s === current;
-        const done = curIdx > idx;
+        const done   = curIdx > idx;
         return (
-          <div
-            key={s}
-            style={{
-              height: 6, borderRadius: 9999,
-              width: active ? 22 : 6,
-              background: active ? '#00C896' : done ? 'rgba(0,200,150,0.35)' : '#252525',
-              transition: 'all 0.3s',
-            }}
-          />
+          <div key={s} style={{
+            height: 6, borderRadius: 9999,
+            width:      active ? 22 : 6,
+            background: active ? '#00C896' : done ? 'rgba(0,200,150,0.35)' : '#252525',
+            transition: 'all 0.3s',
+          }} />
         );
       })}
     </div>
   );
 }
 
-/* ── Back row ─────────────────────────────────────────────────────────────── */
+/* ── Back button ─────────────────────────────────────────────────────────── */
 function BackRow({ onBack }: { onBack: () => void }) {
   return (
     <button
@@ -107,24 +106,25 @@ export function OnboardingScreen() {
 
   const [step,       setStep]     = useState<Step>('welcome');
   const [phone,      setPhone]    = useState('');
-  const [digits,     setDigits]   = useState(['', '', '', '']);
+  const [digits,     setDigits]   = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [otpError,   setOtpError] = useState(false);
   const [shake,      setShake]    = useState(false);
   const [locality,   setLocality] = useState(DEFAULT_LOCALITY.id);
-  const [detecting,   setDetecting]   = useState(false);
-  const [locDenied,   setLocDenied]   = useState(false);
-  const [locDetected, setLocDetected] = useState(false);
-  const [userName,    setUserName]    = useState('');
-  const [resendSec,  setResendSec]= useState(0);
+  const [detecting,  setDetecting]   = useState(false);
+  const [locDenied,  setLocDenied]   = useState(false);
+  const [locDetected,setLocDetected] = useState(false);
+  const [userName,   setUserName]    = useState('');
+  const [resendSec,  setResendSec]   = useState(0);
   const [pendingProfile, setPendingProfile] = useState<UserProfile | null>(null);
+  const [otpSending,   setOtpSending]   = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [usingMockOtp, setUsingMockOtp] = useState(!SUPABASE_CONFIGURED);
 
-  /* ── Digit refs for OTP auto-advance ── */
-  const d0 = useRef<HTMLInputElement>(null);
-  const d1 = useRef<HTMLInputElement>(null);
-  const d2 = useRef<HTMLInputElement>(null);
-  const d3 = useRef<HTMLInputElement>(null);
-  const digitRefs = [d0, d1, d2, d3];
-
+  /* ── Digit input refs (6 boxes) ── */
+  // React 19 createRef<T> returns RefObject<T | null>; match that in the array type
+  const digitRefs = useRef<Array<React.RefObject<HTMLInputElement | null>>>(
+    Array.from({ length: OTP_LENGTH }, () => React.createRef<HTMLInputElement>()),
+  );
   const otp = digits.join('');
 
   /* ── Resend countdown ── */
@@ -132,10 +132,7 @@ export function OnboardingScreen() {
     if (step !== 'otp') return;
     setResendSec(RESEND_SECONDS);
     const id = setInterval(() => {
-      setResendSec(s => {
-        if (s <= 1) { clearInterval(id); return 0; }
-        return s - 1;
-      });
+      setResendSec(s => { if (s <= 1) { clearInterval(id); return 0; } return s - 1; });
     }, 1000);
     return () => clearInterval(id);
   }, [step]);
@@ -147,37 +144,91 @@ export function OnboardingScreen() {
     return () => clearTimeout(t);
   }, [step, pendingProfile, completeOnboarding]);
 
-  /* ── Handlers ── */
-  const sendOtp = () => {
+  /* ── Send OTP ── */
+  const sendOtp = async () => {
     if (phone.length < 10) return;
-    setDigits(['', '', '', '']);
+    setOtpSending(true);
+    setDigits(Array(OTP_LENGTH).fill(''));
+
+    if (SUPABASE_CONFIGURED) {
+      try {
+        const { error } = await supabase.auth.signInWithOtp({
+          phone: '+91' + phone,
+          options: { shouldCreateUser: true },
+        });
+        if (error) {
+          console.warn('[GeoHood Auth] Supabase phone OTP unavailable:', error.message, '→ using mock');
+          setUsingMockOtp(true);
+        } else {
+          setUsingMockOtp(false);
+        }
+      } catch {
+        setUsingMockOtp(true);
+      }
+    } else {
+      setUsingMockOtp(true);
+    }
+
+    setOtpSending(false);
     setStep('otp');
-    setTimeout(() => d0.current?.focus(), 100);
+    setTimeout(() => digitRefs.current[0]?.current?.focus(), 100);
   };
 
+  /* ── OTP digit change ── */
   const handleDigit = (i: number, val: string) => {
-    const d = val.replace(/\D/g, '').slice(-1);
+    const d    = val.replace(/\D/g, '').slice(-1);
     const next = [...digits];
-    next[i] = d;
+    next[i]    = d;
     setDigits(next);
-    if (d && i < 3) digitRefs[i + 1].current?.focus();
+    if (d && i < OTP_LENGTH - 1) digitRefs.current[i + 1]?.current?.focus();
   };
 
   const handleDigitKey = (i: number, e: React.KeyboardEvent) => {
     if (e.key === 'Backspace' && !digits[i] && i > 0) {
-      digitRefs[i - 1].current?.focus();
+      digitRefs.current[i - 1]?.current?.focus();
     }
   };
 
-  const verifyOtp = () => {
-    if (otp === MOCK_OTP) {
-      setStep('location');
-    } else {
-      setOtpError(true);
-      setShake(true);
-      setTimeout(() => setShake(false), 600);
-      setTimeout(() => setOtpError(false), 2200);
+  /* ── Verify OTP ── */
+  const verifyOtp = async () => {
+    if (otp.length < OTP_LENGTH) return;
+    setOtpVerifying(true);
+
+    if (usingMockOtp) {
+      await new Promise(r => setTimeout(r, 600));
+      setOtpVerifying(false);
+      if (otp === MOCK_OTP) {
+        setStep('location');
+      } else {
+        triggerOtpError();
+      }
+      return;
     }
+
+    // Real Supabase verification
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: '+91' + phone,
+        token: otp,
+        type:  'sms',
+      });
+      setOtpVerifying(false);
+      if (error || !data.session) {
+        triggerOtpError();
+      } else {
+        setStep('location');
+      }
+    } catch {
+      setOtpVerifying(false);
+      triggerOtpError();
+    }
+  };
+
+  const triggerOtpError = () => {
+    setOtpError(true);
+    setShake(true);
+    setTimeout(() => setShake(false), 600);
+    setTimeout(() => setOtpError(false), 2200);
   };
 
   const { requestUserLocation } = useUser();
@@ -188,12 +239,8 @@ export function OnboardingScreen() {
     setLocDetected(false);
     const result = await requestUserLocation();
     setDetecting(false);
-    if (result.status === 'granted') {
-      setLocality(result.localityId);
-      setLocDetected(true);
-    } else {
-      setLocDenied(true);
-    }
+    if (result.status === 'granted') { setLocality(result.localityId); setLocDetected(true); }
+    else setLocDenied(true);
   };
 
   const goToName = () => setStep('name');
@@ -202,56 +249,38 @@ export function OnboardingScreen() {
     if (!userName.trim()) return;
     const profile: UserProfile = {
       phone,
-      name: userName.trim(),
+      name:     userName.trim(),
       locality: LOCALITIES.find(l => l.id === locality)?.name ?? 'Patuli',
-      roles: ['user'],
+      roles:    ['user'],
     };
     setPendingProfile(profile);
     setStep('loading');
   };
 
-  /* ── Slide transition variants ── */
-  const slide = {
-    initial: { x: 40,  opacity: 0 },
-    animate: { x: 0,   opacity: 1 },
-    exit:    { x: -40, opacity: 0 },
-  };
-  const slideBack = {
-    initial: { x: -40, opacity: 0 },
-    animate: { x: 0,   opacity: 1 },
-    exit:    { x: 40,  opacity: 0 },
-  };
+  /* ── Transitions ── */
+  const slide     = { initial: { x: 40, opacity: 0 }, animate: { x: 0, opacity: 1 }, exit: { x: -40, opacity: 0 } };
 
   /* ── Loading screen ── */
   if (step === 'loading') {
     return (
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', height: '100%', background: '#080808', gap: 0,
-      }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#080808' }}>
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
         >
-          <img
-            src="/geohood-full-logo.png"
-            alt="GeoHood"
-            draggable={false}
-            style={{ height: 96, width: 'auto', objectFit: 'contain', display: 'block' }}
-          />
+          <img src="/geohood-full-logo.png" alt="GeoHood" draggable={false}
+            style={{ height: 96, width: 'auto', objectFit: 'contain', display: 'block' }} />
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ fontSize: 24, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 8px' }}>
               Welcome, {pendingProfile?.name ?? userName}
             </h2>
             <p style={{ fontSize: 13, color: '#5C5C5C', margin: 0 }}>Setting up your neighbourhood…</p>
           </div>
-          {/* Pulse dots */}
           <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
             {[0, 1, 2].map(i => (
-              <motion.div
-                key={i}
+              <motion.div key={i}
                 animate={{ opacity: [0.2, 1, 0.2] }}
                 transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
                 style={{ width: 7, height: 7, borderRadius: '50%', background: '#00C896' }}
@@ -266,168 +295,101 @@ export function OnboardingScreen() {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: '#0D0D0D', overflowY: 'auto',
-      scrollbarWidth: 'none',
-      position: 'relative',
+      background: '#0D0D0D', overflowY: 'auto', scrollbarWidth: 'none', position: 'relative',
     }}>
-      {/* ── Logo lockup ── */}
+      {/* Logo lockup (all steps except welcome) */}
       {step !== 'welcome' && (
         <div style={{
           flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          gap: 8, paddingTop: 'calc(var(--safe-top, 0px) + 40px)', paddingBottom: 20, paddingLeft: 24, paddingRight: 24,
+          gap: 8, paddingTop: 'calc(var(--safe-top, 0px) + 40px)',
+          paddingBottom: 20, paddingLeft: 24, paddingRight: 24,
         }}>
-          <img
-            src="/geohood-full-logo.png"
-            alt="GeoHood"
-            draggable={false}
-            style={{ height: 56, width: 'auto', objectFit: 'contain', display: 'block' }}
-          />
+          <img src="/geohood-full-logo.png" alt="GeoHood" draggable={false}
+            style={{ height: 56, width: 'auto', objectFit: 'contain', display: 'block' }} />
         </div>
       )}
 
-      {/* ── Step content ── */}
+      {/* Step content */}
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column',
-        alignItems: step === 'welcome' ? 'center' : 'stretch',
+        alignItems:    step === 'welcome' ? 'center' : 'stretch',
         justifyContent: step === 'welcome' ? 'center' : 'flex-start',
         padding: step === 'welcome' ? '0 28px' : '8px 28px 8px',
         position: 'relative',
       }}>
-
         <AnimatePresence mode="wait">
 
-          {/* ════════════════════ WELCOME ════════════════════ */}
+          {/* ════ WELCOME ════ */}
           {step === 'welcome' && (
-            <motion.div
-              key="welcome"
-              {...slide}
-              transition={{ duration: 0.28 }}
+            <motion.div key="welcome" {...slide} transition={{ duration: 0.28 }}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, textAlign: 'center', width: '100%' }}
             >
-              {/* Official logo */}
               <div style={{ marginBottom: 28 }}>
-                <img
-                  src="/geohood-full-logo.png"
-                  alt="GeoHood"
-                  draggable={false}
-                  style={{
-                    height:    180,
-                    width:     'auto',
-                    objectFit: 'contain',
-                    display:   'block',
-                  }}
-                />
+                <img src="/geohood-full-logo.png" alt="GeoHood" draggable={false}
+                  style={{ height: 180, width: 'auto', objectFit: 'contain', display: 'block' }} />
               </div>
-
-              {/* Hero tagline */}
               <p style={{ fontSize: 17, fontWeight: 700, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 10px', lineHeight: 1.4 }}>
                 Your neighbourhood,<br />all in one place.
               </p>
               <p style={{ fontSize: 13, color: '#5C5C5C', lineHeight: 1.65, margin: '0 0 40px', maxWidth: 280 }}>
                 Find local vendors, track live activity,<br />and stay connected with your community.
               </p>
-
-              {/* Feature mini-pills */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 40, flexWrap: 'wrap', justifyContent: 'center' }}>
                 {['🏪 Local Vendors', '🗺️ Live Map', '🏘️ Community'].map(f => (
                   <span key={f} style={{
                     padding: '6px 12px', borderRadius: 9999, fontSize: 11, fontWeight: 500,
                     background: 'rgba(255,255,255,0.04)', border: '1px solid #222', color: '#5C5C5C',
-                  }}>
-                    {f}
-                  </span>
+                  }}>{f}</span>
                 ))}
               </div>
-
-              {/* Premium Get Started CTA */}
               <div style={{ width: '100%', maxWidth: 320 }}>
-                <PrimaryCTA
-                  label="Get Started"
-                  onClick={() => setStep('phone')}
-                  icon={<ArrowRight size={17} />}
-                />
+                <PrimaryCTA label="Get Started" onClick={() => setStep('phone')} icon={<ArrowRight size={17} />} />
               </div>
-
-              <p style={{ fontSize: 11, color: '#2A2A2A', marginTop: 16 }}>
-                No ads · No spam · Just your neighbourhood
-              </p>
+              <p style={{ fontSize: 11, color: '#2A2A2A', marginTop: 16 }}>No ads · No spam · Just your neighbourhood</p>
             </motion.div>
           )}
 
-          {/* ════════════════════ PHONE ════════════════════ */}
+          {/* ════ PHONE ════ */}
           {step === 'phone' && (
             <motion.div key="phone" {...slide} transition={{ duration: 0.25 }} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <BackRow onBack={() => setStep('welcome')} />
-
-              {/* Header */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 32, marginTop: 8 }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 16,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)',
-                }}>
+                <div style={{ width: 52, height: 52, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)' }}>
                   <Phone size={22} color="#00C896" />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-                    Enter your number
-                  </h2>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>Enter your number</h2>
                   <p style={{ fontSize: 13, color: '#5C5C5C', margin: 0 }}>We'll send a one-time password to verify.</p>
                 </div>
               </div>
-
-              {/* Input label */}
               <p style={{ fontSize: 11, fontWeight: 700, color: '#5C5C5C', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>
                 Mobile Number
               </p>
-
-              {/* Phone input */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 0,
                 borderRadius: 18, border: '1px solid #2A2A2A',
-                background: '#161616', overflow: 'hidden', marginBottom: 24,
-                height: 60,
+                background: '#161616', overflow: 'hidden', marginBottom: 24, height: 60,
               }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  gap: 6, padding: '0 16px', borderRight: '1px solid #2A2A2A',
-                  height: '100%', flexShrink: 0,
-                }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 16px', borderRight: '1px solid #2A2A2A', height: '100%', flexShrink: 0 }}>
                   <span style={{ fontSize: 16, lineHeight: 1 }}>🇮🇳</span>
                   <span style={{ fontSize: 14, color: '#ADADAD', fontWeight: 600 }}>+91</span>
                 </div>
                 <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
+                  type="tel" inputMode="numeric" maxLength={10}
                   placeholder="10-digit mobile number"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
-                  style={{
-                    flex: 1, height: '100%', padding: '0 16px',
-                    background: 'transparent', border: 'none', outline: 'none',
-                    fontSize: 16, color: '#EBEBEB',
-                    caretColor: '#00C896',
-                  }}
+                  value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={e => { if (e.key === 'Enter' && phone.length === 10) sendOtp(); }}
+                  style={{ flex: 1, height: '100%', padding: '0 16px', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, color: '#EBEBEB', caretColor: '#00C896' }}
                 />
                 {phone.length > 0 && (
-                  <span style={{
-                    padding: '0 14px', fontSize: 11, fontWeight: 600, flexShrink: 0,
-                    color: phone.length === 10 ? '#00C896' : '#3A3A3A',
-                  }}>
+                  <span style={{ padding: '0 14px', fontSize: 11, fontWeight: 600, flexShrink: 0, color: phone.length === 10 ? '#00C896' : '#3A3A3A' }}>
                     {phone.length}/10
                   </span>
                 )}
               </div>
+              <PrimaryCTA label="Send OTP" onClick={sendOtp} disabled={phone.length < 10} loading={otpSending} icon={<ArrowRight size={17} />} />
 
-              <PrimaryCTA
-                label="Send OTP"
-                onClick={sendOtp}
-                disabled={phone.length < 10}
-                icon={<ArrowRight size={17} />}
-              />
-
-              {/* Mock OTP hint */}
+              {/* Mock OTP hint (always shown when Supabase phone auth not set up) */}
               <div style={{
                 marginTop: 16, padding: '10px 14px', borderRadius: 12,
                 background: 'rgba(245,166,35,0.06)', border: '1px solid rgba(245,166,35,0.15)',
@@ -435,67 +397,55 @@ export function OnboardingScreen() {
               }}>
                 <span style={{ fontSize: 14 }}>🔑</span>
                 <p style={{ fontSize: 11, color: '#5C5C5C', margin: 0 }}>
-                  Demo mode — OTP is <span style={{ color: '#F5A623', fontWeight: 700, fontFamily: 'monospace' }}>{MOCK_OTP}</span>
+                  {SUPABASE_CONFIGURED
+                    ? 'A 6-digit OTP will be sent via SMS.'
+                    : <>Demo mode — OTP is <span style={{ color: '#F5A623', fontWeight: 700, fontFamily: 'monospace' }}>{MOCK_OTP}</span></>
+                  }
                 </p>
               </div>
             </motion.div>
           )}
 
-          {/* ════════════════════ OTP ════════════════════ */}
+          {/* ════ OTP ════ */}
           {step === 'otp' && (
             <motion.div key="otp" {...slide} transition={{ duration: 0.25 }} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <BackRow onBack={() => setStep('phone')} />
-
-              {/* Header */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 36, marginTop: 8 }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 16,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)',
-                  fontSize: 22,
-                }}>
+                <div style={{ width: 52, height: 52, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)', fontSize: 22 }}>
                   💬
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-                    Verify OTP
-                  </h2>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>Verify OTP</h2>
                   <p style={{ fontSize: 13, color: '#5C5C5C', margin: 0 }}>
                     Sent to <span style={{ color: '#ADADAD', fontWeight: 600 }}>+91 {phone}</span>
                   </p>
                 </div>
               </div>
 
-              {/* 4 individual OTP boxes */}
               <p style={{ fontSize: 11, fontWeight: 700, color: '#5C5C5C', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px', textAlign: 'center' }}>
-                Enter 4-Digit Code
+                Enter {OTP_LENGTH}-Digit Code
               </p>
+
+              {/* 6 OTP boxes */}
               <motion.div
                 animate={shake ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : {}}
                 transition={{ duration: 0.45 }}
-                style={{ display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 8 }}
+                style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 8 }}
               >
-                {[d0, d1, d2, d3].map((ref, i) => (
+                {digitRefs.current.map((ref, i) => (
                   <input
                     key={i}
-                    ref={ref}
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={1}
+                    ref={ref as React.RefObject<HTMLInputElement>}
+                    type="tel" inputMode="numeric" maxLength={1}
                     value={digits[i]}
                     onChange={e => handleDigit(i, e.target.value)}
                     onKeyDown={e => handleDigitKey(i, e)}
                     style={{
-                      width: 64, height: 68, borderRadius: 16, textAlign: 'center',
-                      fontSize: 26, fontWeight: 800, letterSpacing: '0.05em',
-                      border: `2px solid ${
-                        digits[i] ? 'rgba(0,200,150,0.45)' :
-                        otpError  ? 'rgba(255,77,106,0.4)' :
-                                    '#2A2A2A'
-                      }`,
+                      width: 44, height: 56, borderRadius: 14, textAlign: 'center',
+                      fontSize: 22, fontWeight: 800, letterSpacing: '0.05em',
+                      border: `2px solid ${digits[i] ? 'rgba(0,200,150,0.45)' : otpError ? 'rgba(255,77,106,0.4)' : '#2A2A2A'}`,
                       background: digits[i] ? 'rgba(0,200,150,0.06)' : '#161616',
-                      color: '#EBEBEB',
-                      outline: 'none', caretColor: '#00C896',
+                      color: '#EBEBEB', outline: 'none', caretColor: '#00C896',
                       transition: 'border-color 0.18s, background 0.18s',
                     }}
                   />
@@ -503,48 +453,35 @@ export function OnboardingScreen() {
               </motion.div>
 
               {otpError && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   style={{ textAlign: 'center', fontSize: 12, color: '#FF4D6A', margin: '4px 0 0' }}
                 >
-                  Incorrect OTP. Try <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{MOCK_OTP}</span>
+                  {usingMockOtp
+                    ? <>Incorrect OTP. Try <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{MOCK_OTP}</span></>
+                    : 'Incorrect OTP — check your messages and try again.'
+                  }
                 </motion.p>
               )}
 
-              <div style={{ marginTop: 28, marginBottom: 0 }}>
-                <PrimaryCTA
-                  label="Verify & Continue"
-                  onClick={verifyOtp}
-                  disabled={otp.length < 4}
-                  icon={<ArrowRight size={17} />}
-                />
+              <div style={{ marginTop: 28 }}>
+                <PrimaryCTA label="Verify & Continue" onClick={verifyOtp} disabled={otp.length < OTP_LENGTH} loading={otpVerifying} icon={<ArrowRight size={17} />} />
               </div>
 
-              {/* Resend + edit */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
-                <button
-                  onClick={() => setStep('phone')}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    fontSize: 12, color: '#5C5C5C', background: 'none', border: 'none', cursor: 'pointer',
-                  }}
-                >
+                <button onClick={() => setStep('phone')} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#5C5C5C', background: 'none', border: 'none', cursor: 'pointer' }}>
                   <Phone size={12} /> Edit number
                 </button>
                 <button
                   onClick={() => {
                     if (resendSec > 0) return;
-                    setDigits(['', '', '', '']);
+                    setDigits(Array(OTP_LENGTH).fill(''));
                     setResendSec(RESEND_SECONDS);
-                    setTimeout(() => d0.current?.focus(), 80);
+                    if (SUPABASE_CONFIGURED && !usingMockOtp) {
+                      supabase.auth.signInWithOtp({ phone: '+91' + phone, options: { shouldCreateUser: true } }).catch(console.warn);
+                    }
+                    setTimeout(() => digitRefs.current[0]?.current?.focus(), 80);
                   }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    fontSize: 12, fontWeight: 600,
-                    color: resendSec > 0 ? '#3A3A3A' : '#00C896',
-                    background: 'none', border: 'none', cursor: resendSec > 0 ? 'default' : 'pointer',
-                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: resendSec > 0 ? '#3A3A3A' : '#00C896', background: 'none', border: 'none', cursor: resendSec > 0 ? 'default' : 'pointer' }}
                 >
                   <RefreshCw size={12} />
                   {resendSec > 0 ? `Resend in ${resendSec}s` : 'Resend OTP'}
@@ -553,185 +490,93 @@ export function OnboardingScreen() {
             </motion.div>
           )}
 
-          {/* ════════════════════ LOCATION ════════════════════ */}
+          {/* ════ LOCATION ════ */}
           {step === 'location' && (
             <motion.div key="location" {...slide} transition={{ duration: 0.25 }} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <BackRow onBack={() => setStep('otp')} />
-
-              {/* Header */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 24, marginTop: 8 }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 16,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)',
-                }}>
+                <div style={{ width: 52, height: 52, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)' }}>
                   <MapPin size={22} color="#00C896" />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-                    Your locality
-                  </h2>
-                  <p style={{ fontSize: 13, color: '#5C5C5C', margin: 0 }}>
-                    For hyper-local vendor and alert feeds.
-                  </p>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>Your locality</h2>
+                  <p style={{ fontSize: 13, color: '#5C5C5C', margin: 0 }}>For hyper-local vendor and alert feeds.</p>
                 </div>
               </div>
-
-              {/* Use my location */}
-              <button
-                onClick={detectLocation}
-                disabled={detecting}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  padding: '14px', borderRadius: 16, marginBottom: locDenied ? 8 : 16,
-                  border: `1px solid ${locDenied ? 'rgba(255,77,106,0.25)' : locDetected ? 'rgba(0,200,150,0.35)' : 'rgba(0,200,150,0.25)'}`,
-                  background: locDenied ? 'rgba(255,77,106,0.06)' : locDetected ? 'rgba(0,200,150,0.08)' : 'rgba(0,200,150,0.06)',
-                  fontSize: 13, fontWeight: 600,
-                  color: locDenied ? '#FF4D6A' : '#00C896',
-                  cursor: detecting ? 'wait' : 'pointer',
-                }}
-              >
-                {detecting ? (
-                  <>
-                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}>
-                      <RefreshCw size={15} color="#00C896" />
-                    </motion.div>
-                    Detecting location…
-                  </>
-                ) : locDetected ? (
-                  <><MapPin size={15} /> Location detected ✓</>
-                ) : (
-                  <><MapPin size={15} /> Use my location</>
-                )}
+              <button onClick={detectLocation} disabled={detecting} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '14px', borderRadius: 16, marginBottom: locDenied ? 8 : 16,
+                border: `1px solid ${locDenied ? 'rgba(255,77,106,0.25)' : locDetected ? 'rgba(0,200,150,0.35)' : 'rgba(0,200,150,0.25)'}`,
+                background: locDenied ? 'rgba(255,77,106,0.06)' : locDetected ? 'rgba(0,200,150,0.08)' : 'rgba(0,200,150,0.06)',
+                fontSize: 13, fontWeight: 600, color: locDenied ? '#FF4D6A' : '#00C896',
+                cursor: detecting ? 'wait' : 'pointer',
+              }}>
+                {detecting
+                  ? <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}><RefreshCw size={15} color="#00C896" /></motion.div>Detecting location…</>
+                  : locDetected ? <><MapPin size={15} /> Location detected ✓</>
+                  : <><MapPin size={15} /> Use my location</>
+                }
               </button>
-              {locDenied && (
-                <p style={{ fontSize: 11, color: '#FF4D6A', textAlign: 'center', marginBottom: 12 }}>
-                  Permission denied — please choose manually below.
-                </p>
-              )}
-
+              {locDenied && <p style={{ fontSize: 11, color: '#FF4D6A', textAlign: 'center', marginBottom: 12 }}>Permission denied — please choose manually below.</p>}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1, height: 1, background: '#1E1E1E' }} />
                 <p style={{ fontSize: 11, color: '#3A3A3A', fontWeight: 600, margin: 0 }}>or select manually</p>
                 <div style={{ flex: 1, height: 1, background: '#1E1E1E' }} />
               </div>
-
-              {/* Locality cards */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
                 {LOCALITIES.slice(0, 7).map(loc => {
                   const active = loc.id === locality;
                   return (
-                    <button
-                      key={loc.id}
-                      onClick={() => setLocality(loc.id)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '14px 16px', borderRadius: 16,
-                        border: `1px solid ${active ? 'rgba(0,200,150,0.35)' : '#1E1E1E'}`,
-                        background: active ? 'rgba(0,200,150,0.06)' : '#161616',
-                        cursor: 'pointer', transition: 'border-color 0.18s, background 0.18s',
-                        textAlign: 'left', width: '100%',
-                      }}
-                    >
-                      <div style={{
-                        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: active ? 'rgba(0,200,150,0.12)' : '#1A1A1A',
-                        fontSize: 16,
-                      }}>
-                        📍
-                      </div>
+                    <button key={loc.id} onClick={() => setLocality(loc.id)} style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 16,
+                      border: `1px solid ${active ? 'rgba(0,200,150,0.35)' : '#1E1E1E'}`,
+                      background: active ? 'rgba(0,200,150,0.06)' : '#161616',
+                      cursor: 'pointer', transition: 'border-color 0.18s, background 0.18s', textAlign: 'left', width: '100%',
+                    }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: active ? 'rgba(0,200,150,0.12)' : '#1A1A1A', fontSize: 16 }}>📍</div>
                       <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 14, fontWeight: 600, color: active ? '#EBEBEB' : '#ADADAD', margin: 0 }}>
-                          {loc.name}
-                        </p>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: active ? '#EBEBEB' : '#ADADAD', margin: 0 }}>{loc.name}</p>
                         <p style={{ fontSize: 11, color: '#5C5C5C', margin: '2px 0 0' }}>{loc.district}</p>
                       </div>
-                      {active && (
-                        <div style={{
-                          width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                          background: 'rgba(0,200,150,0.2)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00C896' }} />
-                        </div>
-                      )}
+                      {active && <div style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: 'rgba(0,200,150,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00C896' }} /></div>}
                     </button>
                   );
                 })}
               </div>
-
-              <PrimaryCTA
-                label="Continue"
-                onClick={goToName}
-                icon={<ArrowRight size={17} />}
-              />
+              <PrimaryCTA label="Continue" onClick={goToName} icon={<ArrowRight size={17} />} />
             </motion.div>
           )}
 
-          {/* ════════════════════ NAME ════════════════════ */}
+          {/* ════ NAME ════ */}
           {step === 'name' && (
             <motion.div key="name" {...slide} transition={{ duration: 0.25 }} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <BackRow onBack={() => setStep('location')} />
-
-              {/* Header */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 32, marginTop: 8 }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 16,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)',
-                }}>
+                <div style={{ width: 52, height: 52, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)' }}>
                   <User size={22} color="#00C896" />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-                    What should we call you?
-                  </h2>
-                  <p style={{ fontSize: 13, color: '#5C5C5C', margin: 0 }}>
-                    Your name is shown to neighbours and vendors.
-                  </p>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#EBEBEB', letterSpacing: '-0.02em', margin: '0 0 6px' }}>What should we call you?</h2>
+                  <p style={{ fontSize: 13, color: '#5C5C5C', margin: 0 }}>Your name is shown to neighbours and vendors.</p>
                 </div>
               </div>
-
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#5C5C5C', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>
-                Your Name
-              </p>
-
-              <div style={{
-                display: 'flex', alignItems: 'center',
-                borderRadius: 18, border: `1px solid ${userName.trim() ? 'rgba(0,200,150,0.25)' : '#2A2A2A'}`,
-                background: '#161616', height: 60, marginBottom: 24,
-                paddingLeft: 16, paddingRight: 16,
-                transition: 'border-color 0.18s',
-              }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#5C5C5C', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Your Name</p>
+              <div style={{ display: 'flex', alignItems: 'center', borderRadius: 18, border: `1px solid ${userName.trim() ? 'rgba(0,200,150,0.25)' : '#2A2A2A'}`, background: '#161616', height: 60, marginBottom: 24, paddingLeft: 16, paddingRight: 16, transition: 'border-color 0.18s' }}>
                 <input
-                  type="text"
-                  maxLength={40}
-                  placeholder="Enter your name"
-                  value={userName}
-                  onChange={e => setUserName(e.target.value)}
+                  type="text" maxLength={40} placeholder="Enter your name"
+                  value={userName} onChange={e => setUserName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') goToLoading(); }}
                   autoFocus
-                  style={{
-                    flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                    fontSize: 16, color: '#EBEBEB', caretColor: '#00C896',
-                  }}
+                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, color: '#EBEBEB', caretColor: '#00C896' }}
                 />
               </div>
-
-              <PrimaryCTA
-                label="Continue"
-                onClick={goToLoading}
-                disabled={!userName.trim()}
-                icon={<ArrowRight size={17} />}
-              />
+              <PrimaryCTA label="Continue" onClick={goToLoading} disabled={!userName.trim()} icon={<ArrowRight size={17} />} />
             </motion.div>
           )}
 
         </AnimatePresence>
       </div>
 
-      {/* ── Step dots (visible only during real steps) ── */}
       {(step === 'phone' || step === 'otp' || step === 'location' || step === 'name') && (
         <StepDots current={step} />
       )}

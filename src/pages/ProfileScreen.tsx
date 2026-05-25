@@ -10,6 +10,7 @@ import { LOCALITIES } from '../data/localities';
 import { MOCK_VENDORS } from '../data/mockVendors';
 import { CATEGORY_MAP } from '../constants';
 import { getOpenStatus, formatDistance } from '../utils/timeUtils';
+import { supabase, SUPABASE_CONFIGURED } from '../lib/supabase';
 
 interface Props {
   onClose: () => void;
@@ -782,35 +783,82 @@ export function ProfileScreen({ onClose }: Props) {
   const {
     user, myVendor, selectedLocality, savedVendorIds,
     notificationsEnabled, signOut, deleteVendor,
-    profilePhoto, setProfilePhoto,
+    profilePhoto, setProfilePhoto, supabaseUserId,
   } = useUser();
   const [section, setSection]               = useState<Section>('main');
   const [showSignOut, setShowSignOut]        = useState(false);
   const [showPhotoOpts, setShowPhotoOpts]   = useState(false);
   const [showDeleteVendor, setShowDeleteVendor] = useState(false);
   const [toastMsg, setToastMsg]             = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   // Hidden file inputs
   const cameraInputRef  = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  /* Read selected file → DataURL → persist */
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  /* Read selected file → try Supabase Storage upload → fallback to DataURL */
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const dataUrl = ev.target?.result as string;
-      if (dataUrl) {
-        setProfilePhoto(dataUrl);
-        console.log('[GeoHood Profile] Photo saved, size:', Math.round(dataUrl.length / 1024), 'KB');
-      }
-    };
-    reader.readAsDataURL(file);
-    // Reset so same file can be re-picked
+
+    // Reset input immediately so the same file can be re-picked later
     e.target.value = '';
     setShowPhotoOpts(false);
-  }, [setProfilePhoto]);
+    setPhotoUploading(true);
+
+    try {
+      /* ── Supabase Storage upload (when configured + user is authenticated) ── */
+      if (SUPABASE_CONFIGURED && supabaseUserId) {
+        const ext  = file.name.split('.').pop() ?? 'jpg';
+        const path = `${supabaseUserId}/profile.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('profile-photos')
+          .upload(path, file, { upsert: true, contentType: file.type });
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('profile-photos')
+            .getPublicUrl(path);
+
+          const publicUrl = urlData?.publicUrl;
+          if (publicUrl) {
+            // Bust CDN cache with a version timestamp
+            const bustedUrl = `${publicUrl}?v=${Date.now()}`;
+            setProfilePhoto(bustedUrl);
+
+            // Persist URL to profiles row (fire-and-forget)
+            void supabase
+              .from('profiles')
+              .update({ profile_image_url: bustedUrl })
+              .eq('id', supabaseUserId);
+
+            console.log('[GeoHood Profile] Uploaded to Supabase Storage:', bustedUrl);
+            setPhotoUploading(false);
+            return;
+          }
+        }
+        console.warn('[GeoHood Profile] Storage upload failed, falling back to DataURL:', uploadError);
+      }
+
+      /* ── Fallback: encode as DataURL (works offline / no Supabase) ── */
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const dataUrl = ev.target?.result as string;
+        if (dataUrl) {
+          setProfilePhoto(dataUrl);
+          console.log('[GeoHood Profile] Photo saved as DataURL, size:', Math.round(dataUrl.length / 1024), 'KB');
+        }
+        setPhotoUploading(false);
+      };
+      reader.onerror = () => setPhotoUploading(false);
+      reader.readAsDataURL(file);
+
+    } catch (err) {
+      console.warn('[GeoHood Profile] handleFileChange error:', err);
+      setPhotoUploading(false);
+    }
+  }, [setProfilePhoto, supabaseUserId]);
 
   const handleCamera = useCallback(() => {
     setShowPhotoOpts(false);
@@ -930,11 +978,14 @@ export function ProfileScreen({ onClose }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 20px 20px' }}>
           {/* Tappable avatar ring */}
           <button
-            onClick={() => setShowPhotoOpts(true)}
+            onClick={() => !photoUploading && setShowPhotoOpts(true)}
+            disabled={photoUploading}
             style={{
               position: 'relative', width: 88, height: 88,
               borderRadius: '50%', marginBottom: 14,
-              padding: 0, border: 'none', cursor: 'pointer', background: 'transparent',
+              padding: 0, border: 'none',
+              cursor: photoUploading ? 'wait' : 'pointer',
+              background: 'transparent',
               flexShrink: 0,
             }}
             aria-label="Edit profile photo"
@@ -961,15 +1012,32 @@ export function ProfileScreen({ onClose }: Props) {
               )}
             </div>
 
+            {/* Upload spinner overlay */}
+            {photoUploading && (
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.55)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  border: '2.5px solid rgba(0,200,150,0.3)',
+                  borderTopColor: '#00C896',
+                  animation: 'spin 0.7s linear infinite',
+                }} />
+              </div>
+            )}
+
             {/* Camera badge (bottom-right) */}
             <div style={{
               position: 'absolute', bottom: 2, right: 2,
               width: 26, height: 26, borderRadius: '50%',
-              background: '#00C896',
+              background: photoUploading ? '#2A2A2A' : '#00C896',
               border: '2px solid #0D0D0D',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.2s',
             }}>
-              <Camera size={13} color="#0D0D0D" />
+              <Camera size={13} color={photoUploading ? '#5C5C5C' : '#0D0D0D'} />
             </div>
           </button>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#EBEBEB', margin: 0, letterSpacing: '-0.02em' }}>

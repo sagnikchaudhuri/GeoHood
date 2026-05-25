@@ -6,6 +6,9 @@ import {
   requestGeolocation, LocationResult,
   mockReverseGeocode, PATULI_FALLBACK_LAT, PATULI_FALLBACK_LNG,
 } from '../utils/locationService';
+import {
+  supabase, DbProfile, DbVendor, safeQuery, getCurrentUserId,
+} from '../lib/supabase';
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
 
@@ -24,9 +27,7 @@ const GH_KEYS = [
   'gh_onboarded', 'gh_user', 'gh_vendor', 'gh_leads',
   'gh_residence', 'gh_seen_soc', 'gh_locality', 'gh_locality_manual',
   'gh_saved_vendors', 'gh_notifications',
-  'gh_location',        // single LocationState blob (replaces gh_lat/gh_lng/gh_accuracy)
-  'gh_loc_perm',        // 'unknown' | 'granted' | 'denied'
-  'gh_profile_photo',   // base64 DataURL | null
+  'gh_location', 'gh_loc_perm', 'gh_profile_photo',
 ];
 
 /* ─── Fallback location (Patuli) ─────────────────────────────────────────── */
@@ -39,10 +40,28 @@ const PATULI_LOCATION: LocationState = {
   updatedAt: 0,
 };
 
+/* ─── DbVendor → RegisteredVendor ─────────────────────────────────────────── */
+function dbVendorToRegistered(v: DbVendor): RegisteredVendor {
+  return {
+    id:           v.id,
+    businessName: v.business_name,
+    category:     v.category as RegisteredVendor['category'],
+    subcategory:  v.subcategory,
+    locality:     v.locality,
+    whatsapp:     v.whatsapp,
+    description:  v.description,
+    isLive:       v.is_live,
+    registeredAt: new Date(v.created_at).getTime(),
+    ...(v.lat != null && v.lng != null ? {
+      storeLocation: { lat: v.lat, lng: v.lng, locality: v.locality },
+    } : {}),
+  };
+}
+
 // ─── Context shape ────────────────────────────────────────────────────────────
 
 export type LocationPermission = 'unknown' | 'granted' | 'denied';
-export type LocationStatus = 'idle' | 'detecting' | 'success' | 'denied' | 'error';
+export type LocationStatus     = 'idle' | 'detecting' | 'success' | 'denied' | 'error';
 
 interface UserContextValue {
   // Onboarding
@@ -57,6 +76,7 @@ interface UserContextValue {
   myVendor:       RegisteredVendor | null;
   registerVendor: (v: Omit<RegisteredVendor, 'id' | 'registeredAt' | 'isLive'>) => void;
   setVendorLive:  (live: boolean) => void;
+  deleteVendor:   () => void;
 
   // Leads
   leads:     Lead[];
@@ -82,30 +102,21 @@ interface UserContextValue {
   notificationsEnabled: boolean;
   toggleNotifications:  () => void;
 
-  // ── GPS / Location ─────────────────────────────────────────────────────────
-  /** Full location state — single source of truth */
+  // GPS / Location
   location:           LocationState | null;
-  /** Convenience: lat | null */
   userLat:            number | null;
-  /** Convenience: lng | null */
   userLng:            number | null;
-  /** Convenience: accuracy metres | null */
   userAccuracy:       number | null;
   locationPermission: LocationPermission;
   locationStatus:     LocationStatus;
-
-  /**
-   * Calls getCurrentPosition, updates location state, persists.
-   * Used by: Onboarding, Profile LocalitySelector, MapScreen recenter.
-   */
   requestUserLocation: () => Promise<LocationResult>;
 
-  // Profile photo (V1 — stored as DataURL in localStorage)
+  // Profile photo
   profilePhoto:    string | null;
   setProfilePhoto: (dataUrl: string | null) => void;
 
-  // Delete vendor listing (keeps user account, clears vendor data + leads)
-  deleteVendor: () => void;
+  // Supabase auth id (for Storage uploads etc.)
+  supabaseUserId: string | null;
 
   // Sign out
   signOut: () => void;
@@ -127,74 +138,252 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [localityManualOverride, setLMO]        = useState(() => load('gh_locality_manual', false));
   const [savedVendorIds, setSavedVendorIds]     = useState<string[]>(() => load('gh_saved_vendors', []));
   const [notificationsEnabled, setNotifications]= useState(() => load('gh_notifications', true));
+  const [supabaseUserId, setSupabaseUserId]     = useState<string | null>(null);
 
   // ── Profile photo ──────────────────────────────────────────────────────────
   const [profilePhoto, setProfilePhotoState] = useState<string | null>(
-    () => {
-      try { return localStorage.getItem('gh_profile_photo') ?? null; } catch { return null; }
-    },
+    () => { try { return localStorage.getItem('gh_profile_photo') ?? null; } catch { return null; } },
   );
 
-  // ── Single location state blob ─────────────────────────────────────────────
-  const [location, setLocationState]       = useState<LocationState | null>(() => load('gh_location', null));
-  const [locationPermission, setLocPerm]   = useState<LocationPermission>(() => load('gh_loc_perm', 'unknown'));
-  const [locationStatus, setLocStatus]     = useState<LocationStatus>('idle');
+  // ── Location ───────────────────────────────────────────────────────────────
+  const [location, setLocationState]     = useState<LocationState | null>(() => load('gh_location', null));
+  const [locationPermission, setLocPerm] = useState<LocationPermission>(() => load('gh_loc_perm', 'unknown'));
+  const [locationStatus, setLocStatus]   = useState<LocationStatus>('idle');
 
-  // Derived convenience getters
   const userLat:      number | null = location?.lat      ?? null;
   const userLng:      number | null = location?.lng      ?? null;
   const userAccuracy: number | null = location?.accuracy ?? null;
 
-  // Ref: latest override flag without adding to effect deps
   const lmoRef = useRef(localityManualOverride);
   useEffect(() => { lmoRef.current = localityManualOverride; }, [localityManualOverride]);
 
-  // ── Persist ────────────────────────────────────────────────────────────────
-  useEffect(() => { save('gh_onboarded',       hasOnboarded);           }, [hasOnboarded]);
-  useEffect(() => { save('gh_user',            user);                   }, [user]);
-  useEffect(() => { save('gh_vendor',          myVendor);               }, [myVendor]);
-  useEffect(() => { save('gh_leads',           leads);                  }, [leads]);
-  useEffect(() => { save('gh_residence',       residence);              }, [residence]);
+  // ── Persist to localStorage ────────────────────────────────────────────────
+  useEffect(() => { save('gh_onboarded',       hasOnboarded);             }, [hasOnboarded]);
+  useEffect(() => { save('gh_user',            user);                     }, [user]);
+  useEffect(() => { save('gh_vendor',          myVendor);                 }, [myVendor]);
+  useEffect(() => { save('gh_leads',           leads);                    }, [leads]);
+  useEffect(() => { save('gh_residence',       residence);                }, [residence]);
   useEffect(() => { save('gh_seen_soc',        hasSeenSocietyOnboarding); }, [hasSeenSocietyOnboarding]);
-  useEffect(() => { save('gh_locality',        selectedLocality);       }, [selectedLocality]);
-  useEffect(() => { save('gh_locality_manual', localityManualOverride); }, [localityManualOverride]);
-  useEffect(() => { save('gh_saved_vendors',   savedVendorIds);         }, [savedVendorIds]);
-  useEffect(() => { save('gh_notifications',   notificationsEnabled);   }, [notificationsEnabled]);
-  useEffect(() => { save('gh_location',        location);               }, [location]);
-  useEffect(() => { save('gh_loc_perm',        locationPermission);     }, [locationPermission]);
-  // Profile photo stored raw (DataURL is a string, no JSON needed — but use localStorage directly)
+  useEffect(() => { save('gh_locality',        selectedLocality);         }, [selectedLocality]);
+  useEffect(() => { save('gh_locality_manual', localityManualOverride);   }, [localityManualOverride]);
+  useEffect(() => { save('gh_saved_vendors',   savedVendorIds);           }, [savedVendorIds]);
+  useEffect(() => { save('gh_notifications',   notificationsEnabled);     }, [notificationsEnabled]);
+  useEffect(() => { save('gh_location',        location);                 }, [location]);
+  useEffect(() => { save('gh_loc_perm',        locationPermission);       }, [locationPermission]);
   useEffect(() => {
     try {
-      if (profilePhoto) localStorage.setItem('gh_profile_photo', profilePhoto);
-      else               localStorage.removeItem('gh_profile_photo');
+      if (profilePhoto && !profilePhoto.startsWith('http')) {
+        // Only persist DataURLs locally; remote URLs are stored in DB
+        localStorage.setItem('gh_profile_photo', profilePhoto);
+      } else if (!profilePhoto) {
+        localStorage.removeItem('gh_profile_photo');
+      }
     } catch {}
   }, [profilePhoto]);
+
+  // ── Supabase session init & sync ───────────────────────────────────────────
+  useEffect(() => {
+    let mounted = true;
+
+    /** Pull user's full data from Supabase and hydrate local state */
+    const syncFromDb = async (userId: string) => {
+      try {
+        // ── Profile ──
+        const profile = await safeQuery<DbProfile>(() =>
+          supabase.from('profiles').select('*').eq('id', userId).single()
+        );
+        if (mounted && profile) {
+          setUserState(prev => ({
+            phone:    profile.phone,
+            name:     profile.name,
+            locality: profile.locality,
+            roles:    prev?.roles ?? ['user'],
+          }));
+          setHasOnboarded(true);
+          setNotifications(profile.notifications_enabled);
+          if (profile.profile_image_url) {
+            setProfilePhotoState(profile.profile_image_url);
+            try { localStorage.setItem('gh_profile_photo', profile.profile_image_url); } catch {}
+          }
+        }
+
+        // ── Vendor ──
+        const vendor = await safeQuery(() =>
+          supabase.from('vendors').select('*').eq('owner_id', userId).maybeSingle()
+        ) as DbVendor | null;
+        if (mounted && vendor) {
+          setMyVendor(dbVendorToRegistered(vendor));
+          setUserState(prev => prev
+            ? { ...prev, roles: [...new Set([...prev.roles, 'vendor' as const])] }
+            : prev,
+          );
+        }
+
+        // ── Saved vendors ──
+        const saved = await safeQuery(() =>
+          supabase.from('saved_vendors').select('vendor_id').eq('user_id', userId)
+        ) as { vendor_id: string }[] | null;
+        if (mounted && saved) {
+          setSavedVendorIds(saved.map(s => s.vendor_id));
+        }
+
+        // ── Leads ──
+        const dbLeads = await safeQuery(() =>
+          supabase.from('leads')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(100)
+        ) as Array<{ id: string; vendor_id: string; vendor_name: string; user_name: string; action: string; locality: string; created_at: string }> | null;
+        if (mounted && dbLeads && dbLeads.length > 0) {
+          setLeads(dbLeads.map(l => ({
+            id:         l.id,
+            vendorId:   l.vendor_id,
+            vendorName: l.vendor_name,
+            userName:   l.user_name,
+            action:     l.action as Lead['action'],
+            timestamp:  new Date(l.created_at).getTime(),
+            locality:   l.locality,
+          })));
+        }
+      } catch (err) {
+        console.warn('[GeoHood] Supabase sync error:', err);
+      }
+    };
+
+    // Check existing session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      if (session?.user) {
+        setSupabaseUserId(session.user.id);
+        syncFromDb(session.user.id);
+      }
+    }).catch(console.warn);
+
+    // Listen for subsequent auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+        setSupabaseUserId(session.user.id);
+        syncFromDb(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setSupabaseUserId(null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
   const completeOnboarding = useCallback((profile: UserProfile) => {
     setUserState(profile);
     setHasOnboarded(true);
+
+    // Async Supabase sync — fire and forget
+    void (async () => {
+      try {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        setSupabaseUserId(userId);
+        await supabase.from('profiles').upsert({
+          id:                    userId,
+          phone:                 profile.phone,
+          name:                  profile.name,
+          locality:              profile.locality,
+          notifications_enabled: true,
+          updated_at:            new Date().toISOString(),
+        }, { onConflict: 'id' });
+      } catch (err) {
+        console.warn('[GeoHood] Profile upsert failed:', err);
+      }
+    })();
   }, []);
 
-  const setUser = useCallback((u: UserProfile) => setUserState(u), []);
+  const setUser = useCallback((u: UserProfile) => {
+    setUserState(u);
+    void (async () => {
+      const userId = await getCurrentUserId();
+      if (!userId) return;
+      await safeQuery(() =>
+        supabase.from('profiles').update({
+          name:       u.name,
+          locality:   u.locality,
+          updated_at: new Date().toISOString(),
+        }).eq('id', userId)
+      );
+    })();
+  }, []);
 
   const registerVendor = useCallback(
     (v: Omit<RegisteredVendor, 'id' | 'registeredAt' | 'isLive'>) => {
+      const tempId = `vendor_${Date.now()}`;
       const vendor: RegisteredVendor = {
-        ...v, id: `vendor_${Date.now()}`, registeredAt: Date.now(), isLive: false,
+        ...v, id: tempId, registeredAt: Date.now(), isLive: false,
       };
       setMyVendor(vendor);
       setUserState(prev => prev
         ? { ...prev, roles: [...new Set([...prev.roles, 'vendor' as const])] }
         : prev,
       );
+
+      void (async () => {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        const result = await safeQuery(() =>
+          supabase.from('vendors').insert({
+            owner_id:      userId,
+            business_name: v.businessName,
+            category:      v.category,
+            subcategory:   v.subcategory,
+            description:   v.description,
+            whatsapp:      v.whatsapp,
+            locality:      v.locality,
+            is_live:       false,
+            lat:           v.storeLocation?.lat ?? null,
+            lng:           v.storeLocation?.lng ?? null,
+          }).select().single()
+        ) as DbVendor | null;
+
+        if (result) {
+          // Replace temp id with real DB id
+          setMyVendor(prev => prev ? { ...prev, id: result.id } : prev);
+        }
+      })();
     },
     [],
   );
 
   const setVendorLive = useCallback((live: boolean) => {
     setMyVendor(prev => prev ? { ...prev, isLive: live } : prev);
+    void (async () => {
+      const userId = await getCurrentUserId();
+      if (!userId) return;
+      await safeQuery(() =>
+        supabase.from('vendors')
+          .update({ is_live: live, updated_at: new Date().toISOString() })
+          .eq('owner_id', userId)
+      );
+    })();
+  }, []);
+
+  const deleteVendor = useCallback(() => {
+    setMyVendor(null);
+    setLeads([]);
+    setUserState(prev => prev
+      ? { ...prev, roles: prev.roles.filter(r => r !== 'vendor') }
+      : prev,
+    );
+    void (async () => {
+      const userId = await getCurrentUserId();
+      if (!userId) return;
+      await safeQuery(() =>
+        supabase.from('vendors').delete().eq('owner_id', userId)
+      );
+    })();
   }, []);
 
   const trackLead = useCallback((lead: Omit<Lead, 'id' | 'timestamp'>) => {
@@ -204,6 +393,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       timestamp: Date.now(),
     };
     setLeads(prev => [newLead, ...prev].slice(0, 100));
+
+    void (async () => {
+      const userId = await getCurrentUserId();
+      await safeQuery(() =>
+        supabase.from('leads').insert({
+          vendor_id:   lead.vendorId,
+          vendor_name: lead.vendorName,
+          user_id:     userId ?? undefined,
+          user_name:   lead.userName,
+          action:      lead.action,
+          locality:    lead.locality,
+        })
+      );
+    })();
   }, []);
 
   const setResidence = useCallback((r: ResidenceRegistration) => {
@@ -216,19 +419,37 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const markSocietyOnboardingSeen = useCallback(() => setSeenSoc(true), []);
 
-  /** Manual locality selection — locks override so GPS won't overwrite it */
   const setSelectedLocality = useCallback((id: string) => {
     setLocalityState(id);
     setLMO(true);
-    console.log('[GeoHood Location] Manual locality selected:', id, '(override locked)');
+    console.log('[GeoHood Location] Manual locality selected:', id);
   }, []);
 
   const toggleSavedVendor = useCallback((vendorId: string) => {
-    setSavedVendorIds(prev =>
-      prev.includes(vendorId)
+    setSavedVendorIds(prev => {
+      const isSaved = prev.includes(vendorId);
+
+      void (async () => {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        if (isSaved) {
+          await safeQuery(() =>
+            supabase.from('saved_vendors')
+              .delete()
+              .eq('user_id', userId)
+              .eq('vendor_id', vendorId)
+          );
+        } else {
+          await safeQuery(() =>
+            supabase.from('saved_vendors').insert({ user_id: userId, vendor_id: vendorId })
+          );
+        }
+      })();
+
+      return isSaved
         ? prev.filter(id => id !== vendorId)
-        : [...prev, vendorId],
-    );
+        : [...prev, vendorId];
+    });
   }, []);
 
   const isVendorSaved = useCallback(
@@ -237,13 +458,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   );
 
   const toggleNotifications = useCallback(() => {
-    setNotifications(prev => !prev);
+    setNotifications(prev => {
+      const next = !prev;
+      void (async () => {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        await safeQuery(() =>
+          supabase.from('profiles').update({
+            notifications_enabled: next,
+            updated_at:            new Date().toISOString(),
+          }).eq('id', userId)
+        );
+      })();
+      return next;
+    });
   }, []);
 
-  /**
-   * requestUserLocation — getCurrentPosition (one-shot).
-   * Updates location state + locality + permission. Used everywhere.
-   */
   const requestUserLocation = useCallback(async (): Promise<LocationResult> => {
     console.log('[GeoHood Location] requestUserLocation: starting...');
     setLocStatus('detecting');
@@ -262,37 +492,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       setLocationState(newLocation);
       setLocPerm('granted');
       setLocStatus('success');
-      console.log('[GeoHood Location] Location updated:', newLocation.lat, newLocation.lng);
 
-      // Only auto-update locality if user hasn't manually picked one
       if (!lmoRef.current) {
         setLocalityState(result.localityId);
-        console.log('[GeoHood Location] Locality updated to:', result.localityId);
       }
     } else {
       setLocPerm('denied');
       setLocStatus(result.status === 'denied' ? 'denied' : 'error');
-      console.log('[GeoHood Location] Location failed:', result.status);
-
-      // Fall back to Patuli if no location was ever set
       if (!location) {
         setLocationState({ ...PATULI_LOCATION, updatedAt: Date.now() });
-        console.log('[GeoHood Location] Using Patuli fallback');
       }
     }
 
     return result;
-  // location ref needed to check "no location was ever set"
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const deleteVendor = useCallback(() => {
-    setMyVendor(null);
-    setLeads([]);
-    setUserState(prev => prev
-      ? { ...prev, roles: prev.roles.filter(r => r !== 'vendor') }
-      : prev,
-    );
   }, []);
 
   const setProfilePhoto = useCallback((dataUrl: string | null) => {
@@ -315,6 +528,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setLocPerm('unknown');
     setLocStatus('idle');
     setProfilePhotoState(null);
+    setSupabaseUserId(null);
+
+    // Supabase sign out
+    supabase.auth.signOut().catch(console.warn);
   }, []);
 
   const myLeads = myVendor
@@ -325,7 +542,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     <UserContext.Provider value={{
       hasOnboarded, completeOnboarding,
       user, setUser,
-      myVendor, registerVendor, setVendorLive,
+      myVendor, registerVendor, setVendorLive, deleteVendor,
       leads, trackLead, myLeads,
       residence, setResidence,
       hasSeenSocietyOnboarding, markSocietyOnboardingSeen,
@@ -336,7 +553,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       locationPermission, locationStatus,
       requestUserLocation,
       profilePhoto, setProfilePhoto,
-      deleteVendor,
+      supabaseUserId,
       signOut,
     }}>
       {children}
