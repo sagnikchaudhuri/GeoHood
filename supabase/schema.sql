@@ -160,9 +160,30 @@ create policy "leads_select_vendor_owner"
 -- ────────────────────────────────────────────────────────────
 -- 5. REALTIME
 -- ────────────────────────────────────────────────────────────
--- Enable realtime for vendors and leads tables
-alter publication supabase_realtime add table public.vendors;
-alter publication supabase_realtime add table public.leads;
+-- Add tables to supabase_realtime only if not already members
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname    = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename  = 'vendors'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.vendors;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname    = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename  = 'leads'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.leads;
+  END IF;
+END $$;
 
 -- ────────────────────────────────────────────────────────────
 -- 6. STORAGE BUCKETS
