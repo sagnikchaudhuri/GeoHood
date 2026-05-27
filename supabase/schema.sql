@@ -1,5 +1,6 @@
 -- ============================================================
 -- GeoHood — Supabase Schema
+-- Safe to re-run: uses IF NOT EXISTS + DROP POLICY IF EXISTS
 -- Run this in your Supabase SQL Editor (Dashboard > SQL Editor)
 -- ============================================================
 
@@ -27,14 +28,17 @@ create unique index if not exists profiles_phone_idx on public.profiles (phone);
 -- RLS
 alter table public.profiles enable row level security;
 
+drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
   on public.profiles for select
   using (auth.uid() = id);
 
+drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own"
   on public.profiles for insert
   with check (auth.uid() = id);
 
+drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own"
   on public.profiles for update
   using (auth.uid() = id);
@@ -66,18 +70,22 @@ create index if not exists vendors_is_live_idx  on public.vendors (is_live);
 -- RLS — public read, owner write
 alter table public.vendors enable row level security;
 
+drop policy if exists "vendors_select_all" on public.vendors;
 create policy "vendors_select_all"
   on public.vendors for select
   using (true);
 
+drop policy if exists "vendors_insert_own" on public.vendors;
 create policy "vendors_insert_own"
   on public.vendors for insert
   with check (auth.uid() = owner_id);
 
+drop policy if exists "vendors_update_own" on public.vendors;
 create policy "vendors_update_own"
   on public.vendors for update
   using (auth.uid() = owner_id);
 
+drop policy if exists "vendors_delete_own" on public.vendors;
 create policy "vendors_delete_own"
   on public.vendors for delete
   using (auth.uid() = owner_id);
@@ -97,14 +105,17 @@ create index if not exists saved_vendors_user_idx on public.saved_vendors (user_
 
 alter table public.saved_vendors enable row level security;
 
+drop policy if exists "saved_select_own" on public.saved_vendors;
 create policy "saved_select_own"
   on public.saved_vendors for select
   using (auth.uid() = user_id);
 
+drop policy if exists "saved_insert_own" on public.saved_vendors;
 create policy "saved_insert_own"
   on public.saved_vendors for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "saved_delete_own" on public.saved_vendors;
 create policy "saved_delete_own"
   on public.saved_vendors for delete
   using (auth.uid() = user_id);
@@ -129,11 +140,13 @@ create index if not exists leads_user_idx   on public.leads (user_id);
 alter table public.leads enable row level security;
 
 -- Anyone can insert a lead (contact action)
+drop policy if exists "leads_insert_all" on public.leads;
 create policy "leads_insert_all"
   on public.leads for insert
   with check (true);
 
 -- Vendor owners can read leads for their vendors
+drop policy if exists "leads_select_vendor_owner" on public.leads;
 create policy "leads_select_vendor_owner"
   on public.leads for select
   using (
@@ -154,8 +167,6 @@ alter publication supabase_realtime add table public.leads;
 -- ────────────────────────────────────────────────────────────
 -- 6. STORAGE BUCKETS
 -- ────────────────────────────────────────────────────────────
--- Run these in the Storage section or via SQL:
-
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
   values (
     'profile-photos',
@@ -167,10 +178,12 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
   on conflict (id) do nothing;
 
 -- Profile-photos storage RLS
+drop policy if exists "profile_photos_select_all" on storage.objects;
 create policy "profile_photos_select_all"
   on storage.objects for select
   using (bucket_id = 'profile-photos');
 
+drop policy if exists "profile_photos_insert_own" on storage.objects;
 create policy "profile_photos_insert_own"
   on storage.objects for insert
   with check (
@@ -178,6 +191,7 @@ create policy "profile_photos_insert_own"
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
+drop policy if exists "profile_photos_update_own" on storage.objects;
 create policy "profile_photos_update_own"
   on storage.objects for update
   using (
@@ -185,6 +199,7 @@ create policy "profile_photos_update_own"
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
+drop policy if exists "profile_photos_delete_own" on storage.objects;
 create policy "profile_photos_delete_own"
   on storage.objects for delete
   using (
@@ -203,10 +218,12 @@ begin
 end;
 $$;
 
-create or replace trigger profiles_updated_at
+drop trigger if exists profiles_updated_at on public.profiles;
+create trigger profiles_updated_at
   before update on public.profiles
   for each row execute function public.handle_updated_at();
 
-create or replace trigger vendors_updated_at
+drop trigger if exists vendors_updated_at on public.vendors;
+create trigger vendors_updated_at
   before update on public.vendors
   for each row execute function public.handle_updated_at();
